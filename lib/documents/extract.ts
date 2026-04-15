@@ -1,6 +1,3 @@
-import { PDFParse } from 'pdf-parse'
-import Tesseract from 'tesseract.js'
-
 export async function extractText(
   fileBuffer: Buffer,
   mimeType: string
@@ -17,6 +14,7 @@ export async function extractText(
 }
 
 async function extractFromPdf(buffer: Buffer): Promise<string> {
+  const { PDFParse } = await import('pdf-parse')
   const parser = new PDFParse({ data: buffer })
   const result = await parser.getText()
   await parser.destroy()
@@ -24,6 +22,7 @@ async function extractFromPdf(buffer: Buffer): Promise<string> {
 }
 
 async function extractFromImage(buffer: Buffer): Promise<string> {
+  const Tesseract = (await import('tesseract.js')).default
   const worker = await Tesseract.createWorker('eng')
   const { data } = await worker.recognize(buffer)
   await worker.terminate()
