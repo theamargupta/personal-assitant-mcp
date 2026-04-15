@@ -1,8 +1,15 @@
 import type { Metadata } from 'next'
+import { GeistSans } from 'geist/font/sans'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'PA MCP — Personal Assistant',
-  description: 'Devfrend Personal Assistant MCP Server',
+  title: 'PA MCP — Your AI Personal Assistant',
+  description: 'Track habits, manage tasks, store documents, monitor spending, set goals — and ask Claude anything about your life.',
+  openGraph: {
+    title: 'PA MCP — Your AI Personal Assistant',
+    description: 'One MCP to rule them all. Habits, Tasks, Documents, Finance, Goals — powered by Claude.',
+    type: 'website',
+  },
 }
 
 export default function RootLayout({
@@ -11,8 +18,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={GeistSans.className}>
+      <body className="bg-bg-primary text-text-primary antialiased">
+        {children}
+      </body>
     </html>
   )
 }
