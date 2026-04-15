@@ -211,6 +211,27 @@ npm run lint       # ESLint
 - Goal tools (6/6) — outcome goals (auto-tracked from habits/tasks/finance), milestone goals, cross-module review
 - IST helpers, Zod schemas
 
+- Web App — Premium dark landing page + full dashboard UI
+
 ### Pending
 - Error logging / monitoring
-- Frontend dashboard UI (stretch)
+
+## Web App
+
+### Public Pages
+- `/` — Premium landing page (hero, features, how it works, review showcase, tech strip, footer)
+- `/login` — Supabase Auth login (email/password, Google)
+- `/signup` — Account creation
+
+### Dashboard Pages (authenticated)
+- `/dashboard` — Overview with stat cards (best streak, tasks this week, spending this month, active goals)
+- `/dashboard/habits` — Habit list, streaks, completion bars, log today
+- `/dashboard/tasks` — Task list with filters, priority badges, create/update
+- `/dashboard/finance` — Spending summary, category breakdown, transaction list, add expense
+- `/dashboard/documents` — Document grid, search, download
+- `/dashboard/goals` — Goal progress rings, milestones, toggle completion
+
+### Styling
+- Dark theme (#0a0a0f base, glassmorphism)
+- Tailwind CSS v4 + Framer Motion
+- Geist font
