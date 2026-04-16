@@ -1,19 +1,26 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { toIST } from '@/types'
-import { createTransaction, listTransactions, getSpendingSummary } from '@/lib/finance/transactions'
+import { createTransaction, listTransactions, getSpendingSummary, updateTransaction, deleteTransaction } from '@/lib/finance/transactions'
 import { ensurePresetCategories } from '@/lib/finance/categories'
+import { createSpendingChartImage } from '@/lib/mcp/images'
+import { WIDGET_URIS } from '@/lib/mcp/widgets'
 
 export function registerFinanceTools(server: McpServer) {
 
   // ── get_spending_summary ────────────────────────────────
-  server.tool(
+  registerAppTool(
+    server,
     'get_spending_summary',
-    'Get total spending broken down by category for a date range. Use for questions like "is hafte kitna kharch hua?" or "how much did I spend on food this month?"',
     {
-      start_date: z.string().describe('Start date (YYYY-MM-DD or ISO 8601)'),
-      end_date: z.string().describe('End date (YYYY-MM-DD or ISO 8601)'),
+      description: 'Get total spending broken down by category for a date range. Use for questions like "is hafte kitna kharch hua?" or "how much did I spend on food this month?"',
+      inputSchema: {
+        start_date: z.string().describe('Start date (YYYY-MM-DD or ISO 8601)'),
+        end_date: z.string().describe('End date (YYYY-MM-DD or ISO 8601)'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.spendingChart } },
     },
     async ({ start_date, end_date }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
@@ -23,21 +30,27 @@ export function registerFinanceTools(server: McpServer) {
       const endISO = new Date(end_date + (end_date.includes('T') ? '' : 'T23:59:59+05:30')).toISOString()
 
       const summary = await getSpendingSummary(userId, startISO, endISO)
+      const response = {
+        period: { start: start_date, end: end_date },
+        total_spent: summary.total_spent,
+        breakdown: summary.breakdown.map((row: { category_name: string; category_icon: string; total_amount: number; transaction_count: number }) => ({
+          category: row.category_name,
+          icon: row.category_icon,
+          amount: Number(row.total_amount),
+          count: Number(row.transaction_count),
+        })),
+      }
 
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({
-            period: { start: start_date, end: end_date },
-            total_spent: summary.total_spent,
-            breakdown: summary.breakdown.map((row: { category_name: string; category_icon: string; total_amount: number; transaction_count: number }) => ({
-              category: row.category_name,
-              icon: row.category_icon,
-              amount: Number(row.total_amount),
-              count: Number(row.transaction_count),
-            })),
-          }),
-        }],
+          text: JSON.stringify(response),
+        },
+          createSpendingChartImage({
+            totalSpent: response.total_spent,
+            period: response.period,
+            breakdown: response.breakdown,
+          })],
       }
     }
   )
@@ -186,11 +199,15 @@ export function registerFinanceTools(server: McpServer) {
   )
 
   // ── get_uncategorized ───────────────────────────────────
-  server.tool(
+  registerAppTool(
+    server,
     'get_uncategorized',
-    'Get transactions that have not been categorized yet. Useful for reminding user to categorize pending spends.',
     {
-      limit: z.number().int().min(1).max(50).default(10).describe('Max results (default: 10)'),
+      description: 'Get transactions that have not been categorized yet. Useful for reminding user to categorize pending spends.',
+      inputSchema: {
+        limit: z.number().int().min(1).max(50).default(10).describe('Max results (default: 10)'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.transactionCategorizer } },
     },
     async ({ limit }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
@@ -222,6 +239,91 @@ export function registerFinanceTools(server: McpServer) {
             message: result.total > 0
               ? `${result.total} transactions need categorization`
               : 'All transactions are categorized! 🎉',
+          }),
+        }],
+      }
+    }
+  )
+
+  // ── update_transaction ──────────────────────────────────
+  server.tool(
+    'update_transaction',
+    'Update a transaction — change category, merchant, amount, or note. Use when user says "wo Swiggy wala expense Food mein daal do" or "amount galat hai, 500 karo".',
+    {
+      transaction_id: z.string().uuid().describe('UUID of the transaction to update'),
+      category: z.string().optional().describe('New category name (e.g. "Food", "Bills")'),
+      merchant: z.string().optional().describe('Updated merchant name'),
+      amount: z.number().positive().optional().describe('Corrected amount (in ₹)'),
+      note: z.string().max(500).optional().describe('Updated note'),
+    },
+    async ({ transaction_id, category, merchant, amount, note }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      // Resolve category name to ID if provided
+      let categoryId: string | undefined
+      if (category) {
+        const supabase = createServiceRoleClient()
+        const { data: cat } = await supabase
+          .from('spending_categories')
+          .select('id')
+          .eq('user_id', userId)
+          .ilike('name', category)
+          .maybeSingle()
+
+        categoryId = cat?.id
+      }
+
+      const updated = await updateTransaction(userId, transaction_id, {
+        categoryId,
+        merchant,
+        amount,
+        note,
+      })
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            transaction_id: updated.id,
+            amount: Number(updated.amount),
+            merchant: updated.merchant,
+            note: updated.note,
+            updated_at: toIST(new Date(updated.updated_at)),
+            message: 'Transaction updated',
+          }),
+        }],
+      }
+    }
+  )
+
+  // ── delete_transaction ──────────────────────────────────
+  server.tool(
+    'delete_transaction',
+    'Permanently delete a transaction. Use when user says "wo transaction delete kar do" or "galat entry hai, hata do".',
+    {
+      transaction_id: z.string().uuid().describe('UUID of the transaction to delete'),
+    },
+    async ({ transaction_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        await deleteTransaction(userId, transaction_id)
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Transaction not found'}` }],
+          isError: true,
+        }
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            deleted: true,
+            transaction_id,
+            message: 'Transaction permanently deleted',
           }),
         }],
       }

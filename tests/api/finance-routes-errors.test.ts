@@ -120,6 +120,20 @@ describe('finance route error paths', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Update failed' })
   })
 
+  it('returns Unknown error when patching throws a non-Error value', async () => {
+    ;(updateTransaction as ReturnType<typeof vi.fn>).mockRejectedValueOnce('bad patch')
+    const { PATCH } = await import('@/app/api/finance/transactions/[id]/route')
+    const request = new NextRequest('http://localhost/api/finance/transactions/tx-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ amount: 200 }),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token' },
+    })
+
+    const response = await PATCH(request, { params: Promise.resolve({ id: 'tx-1' }) })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Unknown error' })
+  })
+
   it('returns 400 when deleting a transaction fails', async () => {
     ;(deleteTransaction as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Delete failed'))
     const { DELETE } = await import('@/app/api/finance/transactions/[id]/route')
@@ -131,6 +145,35 @@ describe('finance route error paths', () => {
     const response = await DELETE(request, { params: Promise.resolve({ id: 'tx-1' }) })
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'Delete failed' })
+  })
+
+  it('returns Unknown error when deleting a transaction throws a non-Error value', async () => {
+    ;(deleteTransaction as ReturnType<typeof vi.fn>).mockRejectedValueOnce('delete failed')
+    const { DELETE } = await import('@/app/api/finance/transactions/[id]/route')
+    const request = new NextRequest('http://localhost/api/finance/transactions/tx-1', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer token' },
+    })
+
+    const response = await DELETE(request, { params: Promise.resolve({ id: 'tx-1' }) })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Unknown error' })
+  })
+
+  it('returns auth errors from transaction DELETE before deleting', async () => {
+    const authResponse = Response.json({ error: 'Unauthorized' }, { status: 401 })
+    ;(authenticateRequest as ReturnType<typeof vi.fn>).mockResolvedValueOnce(authResponse)
+    ;(isAuthError as ReturnType<typeof vi.fn>).mockReturnValueOnce(true)
+    const { DELETE } = await import('@/app/api/finance/transactions/[id]/route')
+    const request = new NextRequest('http://localhost/api/finance/transactions/tx-1', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer token' },
+    })
+
+    const response = await DELETE(request, { params: Promise.resolve({ id: 'tx-1' }) })
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
+    expect(deleteTransaction).not.toHaveBeenCalled()
   })
 
   it('returns auth errors from category GET before listing', async () => {

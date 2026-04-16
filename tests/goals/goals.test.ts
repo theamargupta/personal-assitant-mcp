@@ -9,6 +9,35 @@ vi.mock('@/lib/supabase/service-role', () => ({
 
 import { createGoal, listGoals, updateGoal, addMilestone, toggleMilestone, computeGoalProgress } from '@/lib/goals/goals'
 
+function createProgressChain(result: { data?: any; error?: { message: string } | null; count?: number | null }) {
+  const chain: Record<string, ReturnType<typeof vi.fn>> = {}
+  const methods = ['select', 'insert', 'update', 'delete', 'eq', 'gte', 'lte', 'order', 'limit', 'range', 'single', 'maybeSingle', 'head', 'is']
+  for (const method of methods) chain[method] = vi.fn().mockReturnValue(chain)
+  chain.single = vi.fn().mockResolvedValue(result)
+  chain.maybeSingle = vi.fn().mockResolvedValue(result)
+  ;(chain as Record<string, unknown>).then = (
+    resolve: (value: typeof result) => unknown,
+    reject?: (reason: unknown) => unknown
+  ) => Promise.resolve(result).then(resolve, reject)
+  return chain
+}
+
+function createGoalLookup(overrides: Record<string, unknown>) {
+  return createProgressChain({
+    data: {
+      id: 'g-1',
+      goal_type: 'outcome',
+      metric_type: 'tasks_completed',
+      metric_ref_id: null,
+      target_value: 10,
+      start_date: '2026-04-01',
+      end_date: '2026-04-30',
+      ...overrides,
+    },
+    error: null,
+  })
+}
+
 describe('createGoal', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
@@ -209,5 +238,279 @@ describe('computeGoalProgress', () => {
     expect(result.currentValue).toBe(2)
     expect(result.targetValue).toBe(4)
     expect(result.progressPct).toBe(50)
+  })
+
+  it('computes milestone progress as 2 of 5 completed milestones', async () => {
+    const goalLookup = createGoalLookup({ goal_type: 'milestone' })
+    const milestones = createProgressChain({
+      data: [
+        { completed: true },
+        { completed: true },
+        { completed: false },
+        { completed: false },
+        { completed: false },
+      ],
+      error: null,
+    })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : milestones
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 2, targetValue: 5, progressPct: 40 })
+  })
+
+  it('returns zero progress for milestone goals with no milestones', async () => {
+    const goalLookup = createGoalLookup({ goal_type: 'milestone' })
+    const milestones = createProgressChain({ data: [], error: null })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : milestones
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 0, targetValue: 0, progressPct: 0 })
+  })
+
+  it('computes outcome progress for habit streak goals', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'habit_streak',
+      metric_ref_id: 'habit-1',
+      target_value: 5,
+    })
+    const logs = createProgressChain({
+      data: [
+        { logged_date: '2026-04-10' },
+        { logged_date: '2026-04-09' },
+        { logged_date: '2026-04-08' },
+      ],
+      error: null,
+    })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : logs
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 3, targetValue: 5, progressPct: 60 })
+    expect(logs.eq).toHaveBeenCalledWith('habit_id', 'habit-1')
+  })
+
+  it('returns zero streak when habit streak logs are empty', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'habit_streak',
+      metric_ref_id: 'habit-1',
+      target_value: 5,
+    })
+    const logs = createProgressChain({ data: [], error: null })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : logs
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 0, targetValue: 5, progressPct: 0 })
+  })
+
+  it('guards habit streak goals with a null metric_ref_id', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'habit_streak',
+      metric_ref_id: null,
+      target_value: 5,
+    })
+    mockClient.from.mockReturnValue(goalLookup)
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 0, targetValue: 5, progressPct: 0 })
+    expect(mockClient.from).toHaveBeenCalledTimes(1)
+  })
+
+  it('computes outcome progress for habit completion percentage goals', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'habit_completion',
+      metric_ref_id: 'habit-1',
+      target_value: 100,
+    })
+    const logsCount = createProgressChain({ count: 15, error: null })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : logsCount
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 50, targetValue: 100, progressPct: 50 })
+    expect(logsCount.eq).toHaveBeenCalledWith('habit_id', 'habit-1')
+  })
+
+  it('guards habit completion goals with a null metric_ref_id', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'habit_completion',
+      metric_ref_id: null,
+      target_value: 100,
+    })
+    mockClient.from.mockReturnValue(goalLookup)
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 0, targetValue: 100, progressPct: 0 })
+    expect(mockClient.from).toHaveBeenCalledTimes(1)
+  })
+
+  it('computes outcome progress for completed task count goals', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'tasks_completed',
+      target_value: 10,
+    })
+    const taskCount = createProgressChain({ count: 8, error: null })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : taskCount
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 8, targetValue: 10, progressPct: 80 })
+    expect(taskCount.eq).toHaveBeenCalledWith('status', 'completed')
+  })
+
+  it('treats null completed task counts as zero', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'tasks_completed',
+      target_value: 10,
+    })
+    const taskCount = createProgressChain({ count: null, error: null })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : taskCount
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 0, targetValue: 10, progressPct: 0 })
+  })
+
+  it('caps non-spending progress at 100 percent', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'tasks_completed',
+      target_value: 10,
+    })
+    const taskCount = createProgressChain({ count: 15, error: null })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : taskCount
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 15, targetValue: 10, progressPct: 100 })
+  })
+
+  it('computes inverse progress for spending limit goals', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'spending_limit',
+      target_value: 20000,
+    })
+    const transactions = createProgressChain({
+      data: [{ amount: 10000 }, { amount: '5000' }],
+      error: null,
+    })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : transactions
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 15000, targetValue: 20000, progressPct: 25 })
+  })
+
+  it('applies category filters for spending limit goals with a metric_ref_id', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'spending_limit',
+      metric_ref_id: 'cat-1',
+      target_value: 20000,
+    })
+    const transactions = createProgressChain({
+      data: [{ amount: 5000 }],
+      error: null,
+    })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : transactions
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(transactions.eq).toHaveBeenCalledWith('category_id', 'cat-1')
+    expect(result).toEqual({ currentValue: 5000, targetValue: 20000, progressPct: 75 })
+  })
+
+  it('returns zero progress for spending limits with a zero target', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'spending_limit',
+      target_value: 0,
+    })
+    const transactions = createProgressChain({
+      data: [{ amount: 5000 }],
+      error: null,
+    })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : transactions
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 5000, targetValue: 0, progressPct: 0 })
+  })
+
+  it('does not allow spending limit progress to go below zero', async () => {
+    const goalLookup = createGoalLookup({
+      metric_type: 'spending_limit',
+      target_value: 10000,
+    })
+    const transactions = createProgressChain({
+      data: [{ amount: 12000 }],
+      error: null,
+    })
+    let call = 0
+    mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? goalLookup : transactions
+    })
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 12000, targetValue: 10000, progressPct: 0 })
+  })
+
+  it('returns zero current value for unknown outcome metric types', async () => {
+    mockClient.from.mockReturnValue(createGoalLookup({
+      metric_type: 'unsupported_metric',
+      target_value: 10,
+    }))
+
+    const result = await computeGoalProgress('user-1', 'g-1')
+
+    expect(result).toEqual({ currentValue: 0, targetValue: 10, progressPct: 0 })
+    expect(mockClient.from).toHaveBeenCalledTimes(1)
   })
 })

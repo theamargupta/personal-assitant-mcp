@@ -41,6 +41,8 @@ vi.mock('@/lib/finance/transactions', () => ({
   createTransaction: vi.fn(),
   listTransactions: vi.fn(),
   getSpendingSummary: vi.fn(),
+  updateTransaction: vi.fn(),
+  deleteTransaction: vi.fn(),
 }))
 
 vi.mock('@/lib/finance/categories', () => ({
@@ -80,11 +82,12 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('get_habit_analytics')
     expect(toolNames).toContain('update_habit')
 
-    // Task tools (4)
+    // Task tools (5)
     expect(toolNames).toContain('create_task')
     expect(toolNames).toContain('list_tasks')
     expect(toolNames).toContain('update_task_status')
     expect(toolNames).toContain('complete_task')
+    expect(toolNames).toContain('delete_task')
 
     // Document tools (6)
     expect(toolNames).toContain('upload_document')
@@ -94,11 +97,13 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('search_documents')
     expect(toolNames).toContain('delete_document')
 
-    // Finance tools (4)
+    // Finance tools (6)
     expect(toolNames).toContain('get_spending_summary')
     expect(toolNames).toContain('list_transactions')
     expect(toolNames).toContain('add_transaction')
     expect(toolNames).toContain('get_uncategorized')
+    expect(toolNames).toContain('update_transaction')
+    expect(toolNames).toContain('delete_transaction')
 
     // Goal tools (6)
     expect(toolNames).toContain('create_goal')
@@ -109,8 +114,8 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('add_milestone')
   })
 
-  it('registers exactly 25 tools total', () => {
+  it('registers exactly 28 tools total', () => {
     const server = createMcpServer() as unknown as { tools: Array<{ name: string }> }
-    expect(server.tools).toHaveLength(25)
+    expect(server.tools).toHaveLength(28)
   })
 })

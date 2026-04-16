@@ -1,7 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  mockClient: {
+    from: vi.fn(),
+  },
+}))
 
 vi.mock('@/lib/supabase/service-role', () => ({
-  createServiceRoleClient: vi.fn(() => ({})),
+  createServiceRoleClient: vi.fn(() => mocks.mockClient),
 }))
 
 import {
@@ -9,9 +15,12 @@ import {
   buildProtectedResourceMetadata,
   buildOAuthMetadata,
   buildResourceMetadataUrl,
+  exchangeAuthorizationCode,
+  exchangeRefreshToken,
   parseBearerToken,
   validateAuthorizeRequest,
   validateTokenRequestScopeAndResource,
+  verifyOAuthAccessToken,
 } from '@/lib/mcp/oauth'
 
 const ORIGIN = 'https://pa-mcp.devfrend.com'
@@ -177,5 +186,218 @@ describe('validateTokenRequestScopeAndResource', () => {
       resource: 'https://evil.com/api/mcp',
       origin: ORIGIN,
     })).toThrow('Unsupported resource parameter')
+  })
+})
+
+type QueryResult = {
+  data?: any
+  error?: { message: string } | null
+}
+
+type QueryChain = Record<string, ReturnType<typeof vi.fn>> & {
+  then: (resolve: (value: QueryResult) => unknown, reject?: (reason: unknown) => unknown) => Promise<unknown>
+}
+
+function createOAuthChain(result: QueryResult = { data: null, error: null }): QueryChain {
+  const chain = {} as QueryChain
+  for (const method of ['select', 'insert', 'update', 'eq', 'or']) {
+    chain[method] = vi.fn().mockReturnValue(chain)
+  }
+  chain.single = vi.fn().mockResolvedValue(result)
+  chain.maybeSingle = vi.fn().mockResolvedValue(result)
+  chain.then = (resolve, reject) => Promise.resolve(result).then(resolve, reject)
+  return chain
+}
+
+function tokenRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'token-1',
+    client_id: 'client-1',
+    user_id: 'user-1',
+    scopes: ['mcp:tools'],
+    resource: null,
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+    revoked_at: null,
+    ...overrides,
+  }
+}
+
+function authCodeRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'code-1',
+    client_id: 'client-1',
+    user_id: 'user-1',
+    redirect_uri: 'https://chatgpt.com/callback',
+    code_challenge: 'stored-challenge',
+    code_challenge_method: 'S256',
+    scopes: ['mcp:tools'],
+    resource: null,
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+    used_at: null,
+    ...overrides,
+  }
+}
+
+describe('OAuth token database edge cases', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.mockClient.from.mockReturnValue(createOAuthChain())
+  })
+
+  it('throws when verifying an expired access token', async () => {
+    mocks.mockClient.from.mockReturnValue(createOAuthChain({
+      data: tokenRow({ expires_at: new Date(Date.now() - 1_000).toISOString() }),
+      error: null,
+    }))
+
+    await expect(verifyOAuthAccessToken('expired-token')).rejects.toThrow('Access token has expired')
+  })
+
+  it('throws when verifying a revoked access token', async () => {
+    mocks.mockClient.from.mockReturnValue(createOAuthChain({
+      data: tokenRow({ revoked_at: '2026-04-01T00:00:00.000Z' }),
+      error: null,
+    }))
+
+    await expect(verifyOAuthAccessToken('revoked-token')).rejects.toThrow('Access token has been revoked')
+  })
+
+  it('throws when the refresh token hash does not match a stored token', async () => {
+    mocks.mockClient.from.mockReturnValue(createOAuthChain({ data: null, error: null }))
+
+    await expect(exchangeRefreshToken({
+      clientId: 'client-1',
+      refreshToken: 'wrong-refresh-token',
+    })).rejects.toThrow('Invalid refresh token')
+  })
+
+  it('throws when a S256 PKCE code verifier does not match the stored challenge', async () => {
+    mocks.mockClient.from.mockReturnValue(createOAuthChain({
+      data: authCodeRow({ code_challenge: 'not-the-computed-challenge' }),
+      error: null,
+    }))
+
+    await expect(exchangeAuthorizationCode({
+      clientId: 'client-1',
+      code: 'auth-code',
+      codeVerifier: 'valid-looking-but-wrong-verifier',
+      redirectUri: 'https://chatgpt.com/callback',
+    })).rejects.toThrow('Invalid code verifier')
+  })
+
+  it('rotates a valid refresh token and returns a new token pair', async () => {
+    const tokenLookup = createOAuthChain({
+      data: tokenRow({ resource: null }),
+      error: null,
+    })
+    const revokeOldToken = createOAuthChain({ error: null })
+    const insertNewToken = createOAuthChain({ error: null })
+    insertNewToken.insert = vi.fn().mockResolvedValue({ error: null })
+
+    let call = 0
+    mocks.mockClient.from.mockImplementation(() => {
+      call++
+      if (call === 1) return tokenLookup
+      if (call === 2) return revokeOldToken
+      return insertNewToken
+    })
+
+    const tokens = await exchangeRefreshToken({
+      clientId: 'client-1',
+      refreshToken: 'valid-refresh-token',
+      scopes: ['mcp:tools'],
+      resource: null,
+    })
+
+    expect(revokeOldToken.update).toHaveBeenCalledWith({ revoked_at: expect.any(String) })
+    expect(insertNewToken.insert).toHaveBeenCalledWith(expect.objectContaining({
+      client_id: 'client-1',
+      user_id: 'user-1',
+      scopes: ['mcp:tools'],
+      resource: null,
+    }))
+    expect(tokens.access_token).toMatch(/^mcp_at_/)
+    expect(tokens.refresh_token).toMatch(/^mcp_rt_/)
+    expect(tokens.token_type).toBe('bearer')
+    expect(tokens.scope).toBe('mcp:tools')
+  })
+
+  it('uses stored refresh token scopes and resource when refresh request omits them', async () => {
+    const tokenLookup = createOAuthChain({
+      data: tokenRow({
+        scopes: null,
+        resource: 'https://example.com/api/mcp',
+      }),
+      error: null,
+    })
+    const revokeOldToken = createOAuthChain({ error: null })
+    const insertNewToken = createOAuthChain({ error: null })
+    insertNewToken.insert = vi.fn().mockResolvedValue({ error: null })
+
+    let call = 0
+    mocks.mockClient.from.mockImplementation(() => {
+      call++
+      if (call === 1) return tokenLookup
+      if (call === 2) return revokeOldToken
+      return insertNewToken
+    })
+
+    const tokens = await exchangeRefreshToken({
+      clientId: 'client-1',
+      refreshToken: 'valid-refresh-token',
+    })
+
+    expect(insertNewToken.insert).toHaveBeenCalledWith(expect.objectContaining({
+      scopes: ['mcp:tools'],
+      resource: 'https://example.com/api/mcp',
+    }))
+    expect(tokens.scope).toBe('mcp:tools')
+  })
+
+  it('throws when issuing rotated refresh-token credentials fails', async () => {
+    const tokenLookup = createOAuthChain({
+      data: tokenRow({ resource: null }),
+      error: null,
+    })
+    const revokeOldToken = createOAuthChain({ error: null })
+    const insertNewToken = createOAuthChain({ error: null })
+    insertNewToken.insert = vi.fn().mockResolvedValue({ error: { message: '' } })
+
+    let call = 0
+    mocks.mockClient.from.mockImplementation(() => {
+      call++
+      if (call === 1) return tokenLookup
+      if (call === 2) return revokeOldToken
+      return insertNewToken
+    })
+
+    await expect(exchangeRefreshToken({
+      clientId: 'client-1',
+      refreshToken: 'valid-refresh-token',
+      scopes: ['mcp:tools'],
+      resource: null,
+    })).rejects.toThrow('Failed to issue OAuth tokens')
+  })
+
+  it('returns default scopes and parsed resource for a valid access token', async () => {
+    const lookup = createOAuthChain({
+      data: tokenRow({
+        scopes: null,
+        resource: 'https://example.com/api/mcp',
+      }),
+      error: null,
+    })
+    const updateLastUsed = createOAuthChain({ error: null })
+    let call = 0
+    mocks.mockClient.from.mockImplementation(() => {
+      call++
+      return call === 1 ? lookup : updateLastUsed
+    })
+
+    const authInfo = await verifyOAuthAccessToken('valid-token')
+
+    expect(authInfo.scopes).toEqual(['mcp:tools'])
+    expect(authInfo.resource?.toString()).toBe('https://example.com/api/mcp')
+    expect(updateLastUsed.update).toHaveBeenCalledWith({ last_used_at: expect.any(String) })
   })
 })

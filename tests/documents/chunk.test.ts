@@ -18,6 +18,18 @@ describe('chunkText', () => {
     expect(result[0].tokenCount).toBeGreaterThan(0)
   })
 
+  it('returns a single chunk for very short text', () => {
+    const result = chunkText('hello')
+    expect(result).toEqual([{ content: 'hello', index: 0, tokenCount: 2 }])
+  })
+
+  it('keeps text exactly at the target chunk boundary in one chunk', () => {
+    const text = 'a'.repeat(2000)
+    const result = chunkText(text)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ content: text, index: 0, tokenCount: 500 })
+  })
+
   it('calculates token count as ceil(length / 4)', () => {
     const text = 'abcd' // 4 chars = 1 token
     const result = chunkText(text)
@@ -36,6 +48,15 @@ describe('chunkText', () => {
     for (let i = 0; i < result.length; i++) {
       expect(result[i].index).toBe(i)
     }
+  })
+
+  it('keeps indices sequential across many chunks', () => {
+    const paragraphs = Array.from({ length: 18 }, (_, index) => `Paragraph ${index} ${'x'.repeat(280)}`).join('\n\n')
+    const result = chunkText(paragraphs)
+    expect(result.length).toBeGreaterThan(2)
+    expect(result.map((chunk: TextChunk) => chunk.index)).toEqual(
+      Array.from({ length: result.length }, (_, index) => index)
+    )
   })
 
   it('handles single large paragraph by splitting on sentences', () => {

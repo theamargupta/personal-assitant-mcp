@@ -4,6 +4,7 @@ import { registerTaskTools } from '@/lib/mcp/tools/tasks'
 import { registerDocumentTools } from '@/lib/mcp/tools/documents'
 import { registerFinanceTools } from '@/lib/mcp/tools/finance'
 import { registerGoalTools } from '@/lib/mcp/tools/goals'
+import { registerWidgetResources } from '@/lib/mcp/widgets'
 
 export function createMcpServer() {
   const server = new McpServer({
@@ -16,6 +17,7 @@ export function createMcpServer() {
   registerDocumentTools(server)
   registerFinanceTools(server)
   registerGoalTools(server)
+  registerWidgetResources(server)
 
   return server
 }

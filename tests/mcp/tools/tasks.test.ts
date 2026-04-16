@@ -214,6 +214,19 @@ describe('list_tasks', () => {
     expect(parsed.tasks).toHaveLength(1)
     expect(parsed.tasks[0].task_id).toBe('t-1')
   })
+
+  it('returns tool error when listing tasks fails', async () => {
+    const listChain = createQuery({ data: null, count: null, error: { message: 'List failed' } })
+    queue('tasks', listChain)
+
+    const result = await mocks.registeredTools['list_tasks'].handler(
+      { limit: 10, offset: 0 },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: List failed')
+  })
 })
 
 describe('update_task_status', () => {
@@ -323,6 +336,22 @@ describe('complete_task', () => {
     expect(parsed.days_to_complete).toBe(6)
   })
 
+  it('returns tool error when marking task complete fails', async () => {
+    queue('tasks', createQuery({
+      data: task({ id: 't-1', title: 'Task', created_at: '2026-04-11T06:30:00.000Z' }),
+      error: null,
+    }))
+    queue('tasks', createQuery({ error: { message: 'Update failed' } }))
+
+    const result = await mocks.registeredTools['complete_task'].handler(
+      { task_id: 't-1' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Update failed')
+  })
+
   it('is not overdue when completed on time', async () => {
     queue('tasks', createQuery({
       data: task({ id: 't-on-time', title: 'Future due task', created_at: '2026-04-14T06:30:00.000Z', due_date: '2026-04-17' }),
@@ -358,5 +387,67 @@ describe('complete_task', () => {
       completed_at: '2026-04-15T06:30:00.000Z',
     })
     expect(mocks.mockClient.from).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('delete_task', () => {
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['delete_task'].handler(
+      { task_id: 't-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('returns error when task to delete is not found', async () => {
+    queue('tasks', createQuery({ data: null, error: { message: 'not found' } }))
+
+    const result = await mocks.registeredTools['delete_task'].handler(
+      { task_id: 't-bad' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Task not found')
+  })
+
+  it('deletes a task after verifying ownership', async () => {
+    const deleteChain = createQuery({ error: null })
+    queue('tasks', createQuery({
+      data: { id: 't-1', title: 'Old task' },
+      error: null,
+    }))
+    queue('tasks', deleteChain)
+
+    const result = await mocks.registeredTools['delete_task'].handler(
+      { task_id: 't-1' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(deleteChain.delete).toHaveBeenCalled()
+    expect(deleteChain.eq).toHaveBeenCalledWith('id', 't-1')
+    expect(deleteChain.eq).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(parsed).toEqual({
+      deleted: true,
+      task_id: 't-1',
+      title: 'Old task',
+      message: 'Task permanently deleted',
+    })
+  })
+
+  it('returns tool error when task delete fails', async () => {
+    queue('tasks', createQuery({
+      data: { id: 't-1', title: 'Old task' },
+      error: null,
+    }))
+    queue('tasks', createQuery({ error: { message: 'Delete failed' } }))
+
+    const result = await mocks.registeredTools['delete_task'].handler(
+      { task_id: 't-1' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Delete failed')
   })
 })

@@ -1,0 +1,88 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 13px system-ui, sans-serif; background: transparent; color: #fafafa; }
+  .container { padding: 16px; }
+  .title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 11px; color: #737373; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; max-width: 280px; }
+  .day-label { font-size: 9px; color: #525252; text-align: center; padding: 2px 0; }
+  .cell { aspect-ratio: 1; border-radius: 3px; position: relative; }
+  .cell.completed { background: #c8ff00; }
+  .cell.missed { background: rgba(255,255,255,0.04); }
+  .cell.today { outline: 1.5px solid #c8ff00; outline-offset: -1px; }
+  .stats { display: flex; gap: 20px; margin-top: 16px; }
+  .stat { }
+  .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-value.neon { color: #c8ff00; }
+  .stat-label { font-size: 10px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em; }
+  .tooltip { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); color: #fafafa; font-size: 10px; padding: 3px 6px; border-radius: 4px; white-space: nowrap; pointer-events: none; display: none; z-index: 10; }
+  .cell:hover .tooltip { display: block; }
+
+  @media (prefers-color-scheme: light) {
+    body { color: #1a1a1a; }
+    .cell.missed { background: rgba(0,0,0,0.04); }
+    .cell.completed { background: #65a300; }
+    .cell.today { outline-color: #65a300; }
+    .stat-value.neon { color: #65a300; }
+    .stat-label { color: #888; }
+    .subtitle { color: #888; }
+    .tooltip { background: #fff; border-color: rgba(0,0,0,0.1); color: #1a1a1a; }
+  }
+</style>
+<div class="container">
+  <div class="title" id="habit-name"></div>
+  <div class="subtitle" id="period"></div>
+  <div class="grid" id="grid">
+    <div class="day-label">M</div><div class="day-label">T</div><div class="day-label">W</div>
+    <div class="day-label">T</div><div class="day-label">F</div><div class="day-label">S</div><div class="day-label">S</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-value neon" id="streak"></div><div class="stat-label">Current Streak</div></div>
+    <div class="stat"><div class="stat-value" id="best"></div><div class="stat-label">Best Streak</div></div>
+    <div class="stat"><div class="stat-value neon" id="pct"></div><div class="stat-label">Completion</div></div>
+  </div>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+(async () => {
+  const app = new App({ name: "HabitHeatmap", version: "1.0.0" }, {});
+  const grid = document.getElementById("grid");
+
+  app.ontoolresult = ({ content }) => {
+    const data = JSON.parse(content[0].text);
+    document.getElementById("habit-name").textContent = data.name;
+    document.getElementById("period").textContent = data.period_days + "-day overview";
+    document.getElementById("streak").textContent = data.current_streak + "d";
+    document.getElementById("best").textContent = data.best_streak + "d";
+    document.getElementById("pct").textContent = data.completion_percentage + "%";
+
+    const today = new Date().toISOString().split("T")[0];
+
+    if (data.day_by_day && data.day_by_day.length > 0) {
+      const firstDate = new Date(data.day_by_day[0].date);
+      const dayOfWeek = firstDate.getDay();
+      const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      for (let i = 0; i < mondayOffset; i++) {
+        const spacer = document.createElement("div");
+        grid.appendChild(spacer);
+      }
+    }
+
+    for (const day of data.day_by_day || []) {
+      const cell = document.createElement("div");
+      cell.className = "cell " + (day.completed ? "completed" : "missed");
+      if (day.date === today) cell.classList.add("today");
+      const tip = document.createElement("div");
+      tip.className = "tooltip";
+      tip.textContent = day.date + (day.completed ? " ✓" : " ✗");
+      cell.appendChild(tip);
+      grid.appendChild(cell);
+    }
+  };
+
+  await app.connect();
+})();
+</script>

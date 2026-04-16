@@ -1,0 +1,131 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 13px system-ui, sans-serif; background: transparent; color: #fafafa; }
+  .container { padding: 16px; }
+  .header { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .subheader { font-size: 11px; color: #525252; margin-bottom: 20px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; color: #c8ff00; margin-bottom: 10px; }
+  .highlights { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 20px; }
+  .highlight-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 12px; }
+  .highlight-value { font-size: 20px; font-weight: 700; }
+  .highlight-value.neon { color: #c8ff00; }
+  .highlight-label { font-size: 10px; color: #525252; margin-top: 2px; }
+  .habit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .habit-name { font-size: 12px; flex: 1; }
+  .habit-streak { font-size: 12px; color: #c8ff00; font-family: ui-monospace, monospace; }
+  .progress-bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.04); flex: 1; max-width: 100px; }
+  .progress-fill { height: 100%; border-radius: 2px; background: #c8ff00; }
+  .goal-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .goal-ring { width: 36px; height: 36px; flex-shrink: 0; }
+  .goal-info { flex: 1; }
+  .goal-title { font-size: 12px; }
+  .goal-meta { font-size: 10px; color: #525252; }
+  .spending-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+  .spending-cat { color: #737373; }
+  .spending-amt { font-family: ui-monospace, monospace; color: #737373; }
+
+  @media (prefers-color-scheme: light) {
+    body { color: #1a1a1a; }
+    .section-title { color: #65a300; }
+    .highlight-card { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.06); }
+    .highlight-value.neon { color: #65a300; }
+    .highlight-label, .subheader { color: #888; }
+    .habit-streak { color: #65a300; }
+    .progress-bar { background: rgba(0,0,0,0.04); }
+    .progress-fill { background: #65a300; }
+    .spending-cat, .spending-amt, .goal-meta { color: #888; }
+  }
+</style>
+<div class="container">
+  <div class="header" id="title"></div>
+  <div class="subheader" id="period"></div>
+
+  <div class="highlights" id="highlights"></div>
+
+  <div class="section">
+    <div class="section-title">Habit Streaks</div>
+    <div id="habits"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Goals</div>
+    <div id="goals"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Spending</div>
+    <div id="spending"></div>
+  </div>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+(async () => {
+  const app = new App({ name: "ReviewDashboard", version: "1.0.0" }, {});
+
+  function ring(pct, size=36) {
+    const r = (size - 6) / 2;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (pct / 100) * circ;
+    return `<svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="3"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#c8ff00" stroke-width="3"
+        stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
+    </svg>`;
+  }
+
+  app.ontoolresult = ({ content }) => {
+    const d = JSON.parse(content[0].text);
+    document.getElementById("title").textContent = d.period.label + " Review";
+    document.getElementById("period").textContent = d.period.start + " — " + d.period.end;
+
+    const hl = d.highlights;
+    const cards = [
+      { value: hl.tasks_completed, label: "Tasks Done" },
+      { value: hl.tasks_pending, label: "Pending" },
+      { value: "₹" + d.finance.total_spent.toLocaleString("en-IN"), label: "Total Spent", neon: false },
+      { value: hl.goals_hit, label: "Goals Hit", neon: true },
+    ];
+    const hlEl = document.getElementById("highlights");
+    for (const c of cards) {
+      hlEl.innerHTML += `<div class="highlight-card">
+        <div class="highlight-value${c.neon ? " neon" : ""}">${c.value}</div>
+        <div class="highlight-label">${c.label}</div>
+      </div>`;
+    }
+
+    const habitsEl = document.getElementById("habits");
+    for (const h of d.habits.streaks || []) {
+      habitsEl.innerHTML += `<div class="habit-row">
+        <span class="habit-name">${h.name}</span>
+        <div class="progress-bar"><div class="progress-fill" style="width:${h.completion_pct}%"></div></div>
+        <span class="habit-streak">${h.current_streak}d</span>
+      </div>`;
+    }
+
+    const goalsEl = document.getElementById("goals");
+    for (const g of d.goals.details || []) {
+      goalsEl.innerHTML += `<div class="goal-row">
+        <div class="goal-ring">${ring(g.progress_pct)}</div>
+        <div class="goal-info">
+          <div class="goal-title">${g.title}</div>
+          <div class="goal-meta">${g.goal_type} · ${g.progress_pct}%</div>
+        </div>
+      </div>`;
+    }
+
+    const spendEl = document.getElementById("spending");
+    for (const b of d.finance.breakdown || []) {
+      spendEl.innerHTML += `<div class="spending-row">
+        <span class="spending-cat">${b.icon} ${b.category}</span>
+        <span class="spending-amt">₹${b.amount.toLocaleString("en-IN")}</span>
+      </div>`;
+    }
+  };
+
+  await app.connect();
+})();
+</script>

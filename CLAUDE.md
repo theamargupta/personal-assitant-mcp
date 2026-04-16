@@ -83,7 +83,7 @@ app/api/finance/
 | `get_habit_analytics` | N-day completion %, day-by-day breakdown, streaks |
 | `update_habit` | Modify properties or archive |
 
-### Task Tools (4)
+### Task Tools (5)
 
 | Tool | Description |
 |------|-------------|
@@ -91,6 +91,7 @@ app/api/finance/
 | `list_tasks` | Filter by status/priority/due date range; pagination |
 | `update_task_status` | Status transitions with notes |
 | `complete_task` | Mark completed with overdue detection, time-to-completion calc |
+| `delete_task` | Permanently delete a task |
 
 ### Document Wallet Tools (6)
 
@@ -103,13 +104,15 @@ app/api/finance/
 | `search_documents` | Semantic search across all document content |
 | `delete_document` | Permanently delete document, chunks, and stored file |
 
-### Finance Tools (4)
+### Finance Tools (6)
 
 | Tool | Description |
 |------|-------------|
 | `get_spending_summary` | Total spent in date range, broken down by category |
 | `list_transactions` | List transactions with filters (category, date range, merchant) |
 | `add_transaction` | Manual entry via Claude chat |
+| `update_transaction` | Update category, merchant, amount, or note on existing transaction |
+| `delete_transaction` | Permanently delete a transaction |
 | `get_uncategorized` | Show transactions pending categorization |
 
 ### Goal Tools (6)

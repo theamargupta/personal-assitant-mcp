@@ -1,7 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { todayISTDate, toIST } from '@/types'
+import { createHabitHeatmapImage } from '@/lib/mcp/images'
+import { WIDGET_URIS } from '@/lib/mcp/widgets'
 
 // ── streak helpers ───────────────────────────────────────
 
@@ -244,12 +247,16 @@ export function registerHabitTools(server: McpServer) {
   )
 
   // ── get_habit_analytics ──────────────────────────────
-  server.tool(
+  registerAppTool(
+    server,
     'get_habit_analytics',
-    'Get completion percentage, trends, and analytics for a habit over N days.',
     {
-      habit_id: z.string().uuid().describe('UUID of the habit'),
-      days: z.number().int().min(1).max(365).default(30).describe('Number of days to analyze (default: 30)'),
+      description: 'Get completion percentage, trends, and analytics for a habit over N days.',
+      inputSchema: {
+        habit_id: z.string().uuid().describe('UUID of the habit'),
+        days: z.number().int().min(1).max(365).default(30).describe('Number of days to analyze (default: 30)'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.habitHeatmap } },
     },
     async ({ habit_id, days }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
@@ -292,20 +299,30 @@ export function registerHabitTools(server: McpServer) {
       const currentStreak = await calculateCurrentStreak(habit_id)
       const bestStreak = await calculateBestStreak(habit_id)
 
+      const response = {
+        habit_id,
+        name: habit.name,
+        period_days: days,
+        completion_percentage: pct,
+        total_completions: totalCompletions,
+        current_streak: currentStreak,
+        best_streak: bestStreak,
+        day_by_day: dayByDay,
+      }
+
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({
-            habit_id,
-            name: habit.name,
-            period_days: days,
-            completion_percentage: pct,
-            total_completions: totalCompletions,
-            current_streak: currentStreak,
-            best_streak: bestStreak,
-            day_by_day: dayByDay,
-          }),
-        }],
+          text: JSON.stringify(response),
+        },
+          createHabitHeatmapImage({
+            name: response.name,
+            periodDays: response.period_days,
+            completionPercentage: response.completion_percentage,
+            currentStreak: response.current_streak,
+            bestStreak: response.best_streak,
+            dayByDay: response.day_by_day,
+          })],
       }
     }
   )

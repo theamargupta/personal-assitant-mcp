@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 13px system-ui, sans-serif; background: transparent; color: #fafafa; }
+  .container { padding: 16px; }
+  .total { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+  .total .currency { color: #525252; font-weight: 400; }
+  .period { font-size: 11px; color: #525252; margin-bottom: 20px; }
+  .bar-group { margin-bottom: 12px; }
+  .bar-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .bar-label { font-size: 12px; color: #737373; }
+  .bar-amount { font-size: 12px; font-family: ui-monospace, monospace; color: #737373; }
+  .bar-track { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.04); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; background: #c8ff00; transition: width 0.6s ease; }
+  .bar-fill.secondary { background: rgba(255,255,255,0.15); }
+
+  @media (prefers-color-scheme: light) {
+    body { color: #1a1a1a; }
+    .bar-track { background: rgba(0,0,0,0.04); }
+    .bar-fill { background: #65a300; }
+    .bar-fill.secondary { background: rgba(0,0,0,0.08); }
+    .bar-label, .bar-amount, .period { color: #888; }
+    .total .currency { color: #888; }
+  }
+</style>
+<div class="container">
+  <div class="total"><span class="currency">₹</span><span id="total"></span></div>
+  <div class="period" id="period"></div>
+  <div id="bars"></div>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+(async () => {
+  const app = new App({ name: "SpendingChart", version: "1.0.0" }, {});
+
+  app.ontoolresult = ({ content }) => {
+    const data = JSON.parse(content[0].text);
+    document.getElementById("total").textContent = data.total_spent.toLocaleString("en-IN");
+    document.getElementById("period").textContent = data.period.start + " — " + data.period.end;
+
+    const bars = document.getElementById("bars");
+    const maxAmount = Math.max(...data.breakdown.map(b => b.amount), 1);
+
+    for (const cat of data.breakdown) {
+      const pct = (cat.amount / maxAmount) * 100;
+      const group = document.createElement("div");
+      group.className = "bar-group";
+      group.innerHTML = `
+        <div class="bar-header">
+          <span class="bar-label">${cat.icon} ${cat.category}</span>
+          <span class="bar-amount">₹${cat.amount.toLocaleString("en-IN")}</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill${pct < 30 ? " secondary" : ""}" style="width:${pct}%"></div>
+        </div>
+      `;
+      bars.appendChild(group);
+    }
+  };
+
+  await app.connect();
+})();
+</script>

@@ -9,6 +9,52 @@ process.env.OPENAI_API_KEY = 'test-openai-key'
 // Mock server-only (it throws when imported outside Next.js server context)
 vi.mock('server-only', () => ({}))
 
+vi.mock('@modelcontextprotocol/ext-apps/server', () => {
+  const RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app'
+
+  return {
+    RESOURCE_MIME_TYPE,
+    registerAppTool: (
+      server: {
+        registerTool?: (name: string, config: unknown, handler: unknown) => unknown
+        tool?: (name: string, description: string, schema: unknown, handler: unknown) => unknown
+      },
+      name: string,
+      config: {
+        description?: string
+        inputSchema?: unknown
+        _meta: Record<string, unknown> & { ui?: { resourceUri?: string } }
+      },
+      handler: unknown,
+    ) => {
+      const normalizedMeta = config._meta.ui?.resourceUri
+        ? { ...config._meta, 'ui/resourceUri': config._meta.ui.resourceUri }
+        : config._meta
+      const normalizedConfig = { ...config, _meta: normalizedMeta }
+
+      if (server.registerTool) return server.registerTool(name, normalizedConfig, handler)
+      return server.tool?.(name, config.description || '', config.inputSchema || {}, handler)
+    },
+    registerAppResource: (
+      server: {
+        registerResource?: (name: string, uri: string, config: unknown, handler: unknown) => unknown
+        resources?: Array<{ name: string; uri: string; config: unknown; handler: unknown }>
+      },
+      name: string,
+      uri: string,
+      config: Record<string, unknown>,
+      handler: unknown,
+    ) => {
+      const normalizedConfig = { mimeType: RESOURCE_MIME_TYPE, ...config }
+      if (server.registerResource) return server.registerResource(name, uri, normalizedConfig, handler)
+
+      server.resources ||= []
+      server.resources.push({ name, uri, config: normalizedConfig, handler })
+      return { name, uri }
+    },
+  }
+})
+
 // ── Supabase mock builder ───────────────────────────────
 // Builds a chainable query mock that mirrors the Supabase client API.
 

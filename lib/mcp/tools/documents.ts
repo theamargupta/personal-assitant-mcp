@@ -1,10 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { toIST } from '@/types'
 import { buildStoragePath, createSignedUploadUrl, getSignedUrl, deleteFile } from '@/lib/documents/storage'
 import { chunkText } from '@/lib/documents/chunk'
 import { generateEmbeddings, generateEmbedding } from '@/lib/documents/embed'
+import { WIDGET_URIS } from '@/lib/mcp/widgets'
 
 function detectDocType(mimeType: string): 'pdf' | 'image' | 'other' {
   if (mimeType === 'application/pdf') return 'pdf'
@@ -214,11 +216,15 @@ export function registerDocumentTools(server: McpServer) {
   )
 
   // ── get_document ────────────────────────────────────────
-  server.tool(
+  registerAppTool(
+    server,
     'get_document',
-    'Get a document\'s details and a temporary download URL to retrieve the original file.',
     {
-      document_id: z.string().uuid().describe('UUID of the document'),
+      description: 'Get a document\'s details and a temporary download URL to retrieve the original file.',
+      inputSchema: {
+        document_id: z.string().uuid().describe('UUID of the document'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.documentViewer } },
     },
     async ({ document_id }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string

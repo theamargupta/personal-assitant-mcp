@@ -82,6 +82,19 @@ const mocks = vi.hoisted(() => {
       total_spent: state.summaryRows.reduce((sum, row) => sum + Number(row.total_amount), 0),
       breakdown: state.summaryRows,
     })),
+    updateTransaction: vi.fn(async (_userId: string, transactionId: string, input: {
+      categoryId?: string
+      merchant?: string
+      amount?: number
+      note?: string
+    }) => ({
+      id: transactionId,
+      amount: input.amount ?? 450,
+      merchant: input.merchant ?? 'Updated Merchant',
+      note: input.note ?? null,
+      updated_at: '2025-01-16T06:30:00.000Z',
+    })),
+    deleteTransaction: vi.fn(async () => undefined),
     ensurePresetCategories: vi.fn(),
     registeredTools: {} as Record<string, { handler: Function }>,
   }
@@ -95,6 +108,8 @@ vi.mock('@/lib/finance/transactions', () => ({
   createTransaction: mocks.createTransaction,
   listTransactions: mocks.listTransactions,
   getSpendingSummary: mocks.getSpendingSummary,
+  updateTransaction: mocks.updateTransaction,
+  deleteTransaction: mocks.deleteTransaction,
 }))
 
 vi.mock('@/lib/finance/categories', () => ({
@@ -167,6 +182,24 @@ describe('get_spending_summary', () => {
     ])
     expect(Math.round((parsed.breakdown[0].amount / parsed.total_spent) * 100)).toBe(60)
     expect(Math.round((parsed.breakdown[1].amount / parsed.total_spent) * 100)).toBe(40)
+  })
+
+  it('accepts ISO date-time inputs without appending IST boundaries', async () => {
+    const result = await mocks.registeredTools['get_spending_summary'].handler(
+      { start_date: '2025-01-01T00:00:00.000Z', end_date: '2025-01-31T23:59:59.000Z' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.period).toEqual({
+      start: '2025-01-01T00:00:00.000Z',
+      end: '2025-01-31T23:59:59.000Z',
+    })
+    expect(mocks.getSpendingSummary).toHaveBeenCalledWith(
+      'user-1',
+      '2025-01-01T00:00:00.000Z',
+      '2025-01-31T23:59:59.000Z'
+    )
   })
 })
 
@@ -266,6 +299,21 @@ describe('list_transactions', () => {
     }))
     expect(parsed.transactions[0].category).toBe('Food')
   })
+
+  it('passes undefined category id when category lookup has no match', async () => {
+    mocks.state.categoryLookup = null
+
+    const result = await mocks.registeredTools['list_transactions'].handler(
+      { limit: 20, category: 'Missing' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(mocks.listTransactions).toHaveBeenCalledWith(expect.objectContaining({
+      categoryId: undefined,
+    }))
+    expect(parsed.total).toBe(1)
+  })
 })
 
 describe('add_transaction', () => {
@@ -316,6 +364,21 @@ describe('add_transaction', () => {
       categoryId: undefined,
     }))
   })
+
+  it('uses the current date when no transaction date is provided', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-20T10:00:00.000Z'))
+
+    await mocks.registeredTools['add_transaction'].handler(
+      { amount: 125 },
+      { authInfo }
+    )
+
+    expect(mocks.createTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      transactionDate: '2025-01-20T10:00:00.000Z',
+    }))
+    vi.useRealTimers()
+  })
 })
 
 describe('get_uncategorized', () => {
@@ -351,5 +414,125 @@ describe('get_uncategorized', () => {
     expect(parsed.transactions.map((row: { transaction_id: string }) => row.transaction_id)).toEqual(['tx-null-1', 'tx-null-2'])
     expect(parsed.transactions[0].amount).toBe(99)
     expect(parsed.message).toBe('2 transactions need categorization')
+  })
+
+  it('returns the all categorized message when no uncategorized transactions remain', async () => {
+    mocks.state.transactionRows = [
+      tx({ id: 'tx-food', category_id: 'cat-food', spending_categories: { name: 'Food', icon: '🍕' } }),
+    ]
+
+    const result = await mocks.registeredTools['get_uncategorized'].handler(
+      { limit: 10 },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.uncategorized_count).toBe(0)
+    expect(parsed.transactions).toEqual([])
+    expect(parsed.message).toBe('All transactions are categorized! 🎉')
+  })
+})
+
+describe('update_transaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.state.categoryLookup = { id: 'cat-food' }
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['update_transaction'].handler(
+      { transaction_id: 'tx-1', amount: 450 },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('updates transaction fields after resolving category name', async () => {
+    const result = await mocks.registeredTools['update_transaction'].handler(
+      { transaction_id: 'tx-1', category: 'Food', merchant: 'Cafe', amount: 450, note: 'Lunch' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(mocks.updateTransaction).toHaveBeenCalledWith('user-1', 'tx-1', {
+      categoryId: 'cat-food',
+      merchant: 'Cafe',
+      amount: 450,
+      note: 'Lunch',
+    })
+    expect(parsed).toEqual(expect.objectContaining({
+      transaction_id: 'tx-1',
+      amount: 450,
+      merchant: 'Cafe',
+      note: 'Lunch',
+      message: 'Transaction updated',
+    }))
+  })
+
+  it('updates transaction without category lookup when category is omitted', async () => {
+    const result = await mocks.registeredTools['update_transaction'].handler(
+      { transaction_id: 'tx-2', merchant: 'Cafe' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(mocks.mockClient.from).not.toHaveBeenCalled()
+    expect(mocks.updateTransaction).toHaveBeenCalledWith('user-1', 'tx-2', {
+      categoryId: undefined,
+      merchant: 'Cafe',
+      amount: undefined,
+      note: undefined,
+    })
+    expect(parsed.transaction_id).toBe('tx-2')
+  })
+})
+
+describe('delete_transaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['delete_transaction'].handler(
+      { transaction_id: 'tx-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('deletes a transaction and returns confirmation', async () => {
+    const result = await mocks.registeredTools['delete_transaction'].handler(
+      { transaction_id: 'tx-1' },
+      { authInfo }
+    )
+
+    expect(mocks.deleteTransaction).toHaveBeenCalledWith('user-1', 'tx-1')
+    expect(parseToolResult(result)).toEqual({
+      deleted: true,
+      transaction_id: 'tx-1',
+      message: 'Transaction permanently deleted',
+    })
+  })
+
+  it('returns tool error when deleting fails with an Error', async () => {
+    mocks.deleteTransaction.mockRejectedValueOnce(new Error('Transaction not found'))
+
+    const result = await mocks.registeredTools['delete_transaction'].handler(
+      { transaction_id: 'tx-missing' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Transaction not found')
+  })
+
+  it('returns fallback not found message when deleting throws a non-Error value', async () => {
+    mocks.deleteTransaction.mockRejectedValueOnce('missing')
+
+    const result = await mocks.registeredTools['delete_transaction'].handler(
+      { transaction_id: 'tx-missing' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Transaction not found')
   })
 })

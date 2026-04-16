@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import { z } from 'zod'
 import { toIST, todayISTDate } from '@/types'
 import {
@@ -11,6 +12,7 @@ import {
 } from '@/lib/goals/goals'
 import { generateReview } from '@/lib/goals/review'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { WIDGET_URIS } from '@/lib/mcp/widgets'
 
 export function registerGoalTools(server: McpServer) {
 
@@ -232,14 +234,18 @@ export function registerGoalTools(server: McpServer) {
   )
 
   // ── get_review ──────────────────────────────────────────
-  server.tool(
+  registerAppTool(
+    server,
     'get_review',
-    'Get a comprehensive personal review for a period. Pulls habits, tasks, finance, and goals together with highlights. Perfect for "mera April review do" or "is hafte ka summary bata".',
     {
-      period: z.enum(['this_week', 'last_week', 'this_month', 'last_month', 'custom']).default('this_month')
-        .describe('Review period'),
-      start_date: z.string().date().optional().describe('Custom start date (YYYY-MM-DD), required if period=custom'),
-      end_date: z.string().date().optional().describe('Custom end date (YYYY-MM-DD), required if period=custom'),
+      description: 'Get a comprehensive personal review for a period. Pulls habits, tasks, finance, and goals together with highlights. Perfect for "mera April review do" or "is hafte ka summary bata".',
+      inputSchema: {
+        period: z.enum(['this_week', 'last_week', 'this_month', 'last_month', 'custom']).default('this_month')
+          .describe('Review period'),
+        start_date: z.string().date().optional().describe('Custom start date (YYYY-MM-DD), required if period=custom'),
+        end_date: z.string().date().optional().describe('Custom end date (YYYY-MM-DD), required if period=custom'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.reviewDashboard } },
     },
     async ({ period, start_date, end_date }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string

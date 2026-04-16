@@ -244,6 +244,52 @@ describe('list_goals', () => {
       is_recurring: false,
     })
   })
+
+  it('lists multiple goals with their individual progress metrics', async () => {
+    mocks.listGoals.mockResolvedValueOnce([
+      {
+        id: 'g-habit',
+        title: 'Meditate daily',
+        goal_type: 'outcome',
+        status: 'active',
+        start_date: '2026-04-01',
+        end_date: '2026-04-30',
+        target_value: 10,
+        is_recurring: true,
+      },
+      {
+        id: 'g-spend',
+        title: 'Stay under budget',
+        goal_type: 'outcome',
+        status: 'active',
+        start_date: '2026-04-01',
+        end_date: '2026-04-30',
+        target_value: 20000,
+        is_recurring: false,
+      },
+    ])
+    mocks.computeGoalProgress
+      .mockResolvedValueOnce({ currentValue: 8, targetValue: 10, progressPct: 80 })
+      .mockResolvedValueOnce({ currentValue: 15000, targetValue: 20000, progressPct: 25 })
+
+    const result = await mocks.registeredTools['list_goals'].handler(
+      { status: 'active' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.total).toBe(2)
+    expect(parsed.goals.map((goal: { goal_id: string; current_value: number; progress_pct: number }) => ({
+      goal_id: goal.goal_id,
+      current_value: goal.current_value,
+      progress_pct: goal.progress_pct,
+    }))).toEqual([
+      { goal_id: 'g-habit', current_value: 8, progress_pct: 80 },
+      { goal_id: 'g-spend', current_value: 15000, progress_pct: 25 },
+    ])
+    expect(mocks.computeGoalProgress).toHaveBeenNthCalledWith(1, 'user-1', 'g-habit')
+    expect(mocks.computeGoalProgress).toHaveBeenNthCalledWith(2, 'user-1', 'g-spend')
+  })
 })
 
 describe('update_goal', () => {
@@ -388,6 +434,35 @@ describe('get_goal_progress', () => {
     expect(parsed.current_value).toBe(12)
     expect(parsed.target_value).toBe(20)
     expect(parsed.progress_pct).toBe(60)
+    expect(parsed.milestones).toBeNull()
+  })
+
+  it('returns spending-limit progress details at the MCP tool layer', async () => {
+    mocks.computeGoalProgress.mockResolvedValueOnce({ currentValue: 15000, targetValue: 20000, progressPct: 25 })
+    queue('goals', createQuery({
+      data: {
+        id: 'g-3',
+        title: 'Monthly budget',
+        goal_type: 'outcome',
+        metric_type: 'spending_limit',
+        status: 'active',
+        start_date: '2026-04-01',
+        end_date: '2026-04-30',
+      },
+      error: null,
+    }))
+
+    const result = await mocks.registeredTools['get_goal_progress'].handler(
+      { goal_id: 'g-3' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.goal_id).toBe('g-3')
+    expect(parsed.metric_type).toBe('spending_limit')
+    expect(parsed.current_value).toBe(15000)
+    expect(parsed.target_value).toBe(20000)
+    expect(parsed.progress_pct).toBe(25)
     expect(parsed.milestones).toBeNull()
   })
 })

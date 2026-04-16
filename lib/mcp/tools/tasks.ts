@@ -231,4 +231,53 @@ export function registerTaskTools(server: McpServer) {
       }
     }
   )
+
+  // ── delete_task ─────────────────────────────────────────
+  server.tool(
+    'delete_task',
+    'Permanently delete a task. Use when user says "wo task delete kar do" or "galat task bana diya, hata do".',
+    {
+      task_id: z.string().uuid().describe('UUID of the task to delete'),
+    },
+    async ({ task_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+
+      // Verify task exists and belongs to user
+      const { data: task, error: fetchErr } = await supabase
+        .from('tasks')
+        .select('id, title')
+        .eq('id', task_id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchErr || !task) {
+        return { content: [{ type: 'text' as const, text: 'Error: Task not found' }], isError: true }
+      }
+
+      const { error: deleteErr } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', task_id)
+        .eq('user_id', userId)
+
+      if (deleteErr) {
+        return { content: [{ type: 'text' as const, text: `Error: ${deleteErr.message}` }], isError: true }
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            deleted: true,
+            task_id,
+            title: task.title,
+            message: 'Task permanently deleted',
+          }),
+        }],
+      }
+    }
+  )
 }

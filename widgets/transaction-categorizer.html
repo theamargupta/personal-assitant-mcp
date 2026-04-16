@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 13px system-ui, sans-serif; background: transparent; color: #fafafa; }
+  .container { padding: 16px; }
+  .title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 11px; color: #525252; margin-bottom: 16px; }
+  .tx-list { }
+  .tx-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .tx-info { flex: 1; }
+  .tx-merchant { font-size: 13px; }
+  .tx-meta { font-size: 10px; color: #525252; }
+  .tx-amount { font-size: 14px; font-weight: 600; font-family: ui-monospace, monospace; }
+  select { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #fafafa; padding: 6px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; }
+  select:focus { outline: none; border-color: #c8ff00; }
+  .done { color: #c8ff00; font-size: 11px; font-weight: 600; }
+
+  @media (prefers-color-scheme: light) {
+    body { color: #1a1a1a; }
+    .tx-item { border-color: rgba(0,0,0,0.06); }
+    .tx-meta, .subtitle { color: #888; }
+    select { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.1); color: #1a1a1a; }
+    select:focus { border-color: #65a300; }
+    .done { color: #65a300; }
+  }
+</style>
+<div class="container">
+  <div class="title" id="title">Uncategorized Transactions</div>
+  <div class="subtitle" id="subtitle"></div>
+  <div class="tx-list" id="list"></div>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+(async () => {
+  const app = new App({ name: "TransactionCategorizer", version: "1.0.0" }, {});
+  const list = document.getElementById("list");
+  const categories = ["Food", "Transport", "Shopping", "Bills", "Entertainment", "Health", "Education", "Other"];
+
+  app.ontoolresult = ({ content }) => {
+    const data = JSON.parse(content[0].text);
+    document.getElementById("subtitle").textContent = data.uncategorized_count + " transactions need categorization";
+    list.innerHTML = "";
+
+    for (const tx of data.transactions) {
+      const row = document.createElement("div");
+      row.className = "tx-item";
+      row.innerHTML = `
+        <div class="tx-info">
+          <div class="tx-merchant">${tx.merchant || tx.source || "Unknown"}</div>
+          <div class="tx-meta">${tx.date}</div>
+        </div>
+        <div class="tx-amount">₹${tx.amount.toLocaleString("en-IN")}</div>
+      `;
+
+      const sel = document.createElement("select");
+      sel.innerHTML = '<option value="">Assign...</option>' +
+        categories.map(c => `<option value="${c}">${c}</option>`).join("");
+
+      sel.addEventListener("change", () => {
+        if (!sel.value) return;
+        app.sendMessage({
+          role: "user",
+          content: [{ type: "text", text: `Categorize transaction ${tx.transaction_id} as ${sel.value}` }],
+        });
+        sel.replaceWith(Object.assign(document.createElement("span"), { className: "done", textContent: "✓ " + sel.value }));
+      });
+
+      row.appendChild(sel);
+      list.appendChild(row);
+    }
+  };
+
+  await app.connect();
+})();
+</script>
