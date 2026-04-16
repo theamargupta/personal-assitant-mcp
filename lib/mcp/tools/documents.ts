@@ -2,8 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { toIST } from '@/types'
-import { buildStoragePath, createSignedUploadUrl, getSignedUrl, downloadFile, deleteFile } from '@/lib/documents/storage'
-import { extractText } from '@/lib/documents/extract'
+import { buildStoragePath, createSignedUploadUrl, getSignedUrl, deleteFile } from '@/lib/documents/storage'
 import { chunkText } from '@/lib/documents/chunk'
 import { generateEmbeddings, generateEmbedding } from '@/lib/documents/embed'
 
@@ -81,15 +80,16 @@ export function registerDocumentTools(server: McpServer) {
   )
 
   // ── confirm_upload ─────────────────────────────────────
-  // Step 2: After file is uploaded to storage, this downloads it,
-  // extracts text, chunks it, generates embeddings, and marks the document as ready.
+  // Step 2: Claude reads the PDF/image, extracts text itself, and passes it here.
+  // Server only chunks + embeds — no downloading, no OCR, no PDF parsing needed.
   server.tool(
     'confirm_upload',
-    'Confirm a document upload after the file has been uploaded to the signed URL. Triggers text extraction, chunking, and embedding.',
+    'Confirm a document upload after the file has been uploaded to the signed URL. Pass the extracted text content from the PDF/image — Claude should read the document and provide the full text. Server will chunk and generate embeddings for search.',
     {
       document_id: z.string().uuid().describe('UUID of the document returned by upload_document'),
+      extracted_text: z.string().min(1).describe('Full text content extracted from the document. Claude should read the PDF/image and provide all text here.'),
     },
-    async ({ document_id }, { authInfo }) => {
+    async ({ document_id, extracted_text }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
       if (!userId) throw new Error('Unauthorized')
 
@@ -108,56 +108,42 @@ export function registerDocumentTools(server: McpServer) {
         return { content: [{ type: 'text' as const, text: 'Error: Pending document not found. Either the document_id is wrong or it was already confirmed.' }], isError: true }
       }
 
-      // 2. Download file from storage to extract text
-      let fileBuffer: Buffer
-      try {
-        fileBuffer = await downloadFile(doc.storage_path)
-      } catch {
-        return { content: [{ type: 'text' as const, text: 'Error: File not found in storage. Make sure you uploaded the file to the signed URL before confirming.' }], isError: true }
-      }
+      const trimmedText = extracted_text.trim()
 
-      const fileSize = fileBuffer.length
-
-      // 3. Extract text
-      const extractedText = await extractText(fileBuffer, doc.mime_type)
-
-      // 4. Update document record
+      // 2. Update document record with text
       const { error: updateErr } = await supabase
         .from('wallet_documents')
         .update({
-          file_size: fileSize,
-          extracted_text: extractedText || null,
+          extracted_text: trimmedText,
           status: 'ready',
         })
         .eq('id', document_id)
 
       if (updateErr) return { content: [{ type: 'text' as const, text: `Error: ${updateErr.message}` }], isError: true }
 
-      // 5. Chunk and embed
+      // 3. Chunk and embed
       let chunksCreated = 0
-      if (extractedText) {
-        const chunks = chunkText(extractedText)
-        if (chunks.length > 0) {
-          const embeddings = await generateEmbeddings(chunks.map(c => c.content))
+      const chunks = chunkText(trimmedText)
+      if (chunks.length > 0) {
+        const embeddings = await generateEmbeddings(chunks.map(c => c.content))
 
-          const chunkRows = chunks.map((chunk, i) => ({
-            document_id: doc.id,
-            user_id: userId,
-            chunk_index: chunk.index,
-            content: chunk.content,
-            token_count: chunk.tokenCount,
-            embedding: JSON.stringify(embeddings[i]),
-          }))
+        const chunkRows = chunks.map((chunk, i) => ({
+          document_id: doc.id,
+          user_id: userId,
+          chunk_index: chunk.index,
+          content: chunk.content,
+          token_count: chunk.tokenCount,
+          embedding: JSON.stringify(embeddings[i]),
+        }))
 
-          const { error: chunkErr } = await supabase
-            .from('wallet_document_chunks')
-            .insert(chunkRows)
+        const { error: chunkErr } = await supabase
+          .from('wallet_document_chunks')
+          .insert(chunkRows)
 
-          if (chunkErr) {
-            console.error('Chunk insert error:', chunkErr)
-          } else {
-            chunksCreated = chunks.length
-          }
+        if (chunkErr) {
+          console.error('Chunk insert error:', chunkErr)
+        } else {
+          chunksCreated = chunks.length
         }
       }
 
@@ -168,8 +154,7 @@ export function registerDocumentTools(server: McpServer) {
             document_id: doc.id,
             name: doc.name,
             doc_type: doc.doc_type,
-            file_size_bytes: fileSize,
-            text_extracted: !!extractedText,
+            text_extracted: true,
             chunks_created: chunksCreated,
             status: 'ready',
             created_at: toIST(new Date(doc.created_at)),

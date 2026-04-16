@@ -3,32 +3,48 @@
 import { motion } from 'framer-motion'
 
 const badges = [
-  { icon: '🔌', label: 'MCP Protocol' },
-  { icon: '🐘', label: 'Supabase PostgreSQL' },
-  { icon: '🔐', label: 'OAuth 2.0 + PKCE' },
-  { icon: '🛡️', label: 'End-to-End Auth' },
-  { icon: '🕐', label: 'IST Timezone Native' },
-  { icon: '⚡', label: 'Next.js 16' },
+  { label: 'MCP Protocol' },
+  { label: 'Supabase PostgreSQL' },
+  { label: 'OAuth 2.0 + PKCE' },
+  { label: 'End-to-End Auth' },
+  { label: 'IST Timezone Native' },
+  { label: 'Next.js 16' },
+  { label: 'Zod Validation' },
+  { label: 'Vector Search' },
 ]
+
+function MarqueeRow({ direction = 'left' }: { direction?: 'left' | 'right' }) {
+  const items = [...badges, ...badges] // duplicate for seamless loop
+
+  return (
+    <div className="relative overflow-hidden">
+      {/* Fade edges */}
+      <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-bg-primary to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-bg-primary to-transparent z-10 pointer-events-none" />
+
+      <motion.div
+        className="flex gap-3 w-max"
+        animate={{ x: direction === 'left' ? ['0%', '-50%'] : ['-50%', '0%'] }}
+        transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+      >
+        {items.map((b, i) => (
+          <div
+            key={`${b.label}-${i}`}
+            className="flex-shrink-0 px-4 py-2 rounded-full border border-white/[0.06] bg-white/[0.02] text-[12px] text-text-muted font-medium tracking-wide whitespace-nowrap"
+          >
+            {b.label}
+          </div>
+        ))}
+      </motion.div>
+    </div>
+  )
+}
 
 export function TechStrip() {
   return (
-    <section className="py-12 px-6 border-y border-white/5">
-      <div className="max-w-5xl mx-auto flex flex-wrap justify-center gap-4">
-        {badges.map((b, i) => (
-          <motion.div
-            key={b.label}
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.05 }}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/[0.02] text-sm text-text-secondary"
-          >
-            <span>{b.icon}</span>
-            <span>{b.label}</span>
-          </motion.div>
-        ))}
-      </div>
+    <section className="py-12 border-y border-white/[0.04] space-y-3 overflow-hidden">
+      <MarqueeRow direction="left" />
+      <MarqueeRow direction="right" />
     </section>
   )
 }
