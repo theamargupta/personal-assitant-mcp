@@ -315,6 +315,53 @@ export function registerGoalTools(server: McpServer) {
     }
   )
 
+  // ── delete_goal ─────────────────────────────────────────
+  server.tool(
+    'delete_goal',
+    'Permanently delete a goal and all its milestones. Use for test/cleanup workflows — this cannot be undone.',
+    {
+      goal_id: z.string().uuid().describe('UUID of the goal to delete'),
+    },
+    async ({ goal_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+
+      // Verify goal belongs to user
+      const { data: goal, error: fetchErr } = await supabase
+        .from('goals')
+        .select('id, title')
+        .eq('id', goal_id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchErr || !goal) {
+        return { content: [{ type: 'text' as const, text: 'Error: Goal not found' }], isError: true }
+      }
+
+      // Delete milestones first (FK constraint)
+      await supabase.from('goal_milestones').delete().eq('goal_id', goal_id)
+
+      // Delete goal
+      const { error: delErr } = await supabase.from('goals').delete().eq('id', goal_id)
+      if (delErr) {
+        return { content: [{ type: 'text' as const, text: `Error: ${delErr.message}` }], isError: true }
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            deleted: true,
+            goal_id: goal.id,
+            title: goal.title,
+          }),
+        }],
+      }
+    }
+  )
+
   // ── add_milestone ───────────────────────────────────────
   server.tool(
     'add_milestone',

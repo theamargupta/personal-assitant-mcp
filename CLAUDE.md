@@ -80,10 +80,11 @@ app/api/finance/
 
 ## MCP Tools
 
-### Habit Tools (5)
+### Habit Tools (6)
 
 | Tool | Description |
 |------|-------------|
+| `list_habits` | List habits with filters (frequency, archived), current streak per habit, pagination |
 | `create_habit` | Create habit with name, frequency (daily/weekly/monthly), description, color, reminder_time |
 | `log_habit_completion` | Log daily completion with notes; unique constraint per (habit_id, logged_date) |
 | `get_habit_streak` | Current streak, best streak, last logged date |
@@ -122,7 +123,7 @@ app/api/finance/
 | `delete_transaction` | Permanently delete a transaction |
 | `get_uncategorized` | Show transactions pending categorization |
 
-### Goal Tools (6)
+### Goal Tools (7)
 
 | Tool | Description |
 |------|-------------|
@@ -131,6 +132,7 @@ app/api/finance/
 | `update_goal` | Update goal properties or toggle milestone completion |
 | `get_goal_progress` | Detailed progress for a goal including milestones |
 | `get_review` | Comprehensive period review: habits + tasks + finance + goals + highlights |
+| `delete_goal` | Permanently delete a goal and its milestones (hard delete for test/cleanup) |
 | `add_milestone` | Add sub-steps to milestone-type goals |
 
 ### Memory Tools (11)

@@ -89,6 +89,56 @@ async function completionPercentage(habitId: string, days: number): Promise<numb
 
 export function registerHabitTools(server: McpServer) {
 
+  // ── list_habits ──────────────────────────────────────
+  server.tool(
+    'list_habits',
+    'List all habits with optional filters for frequency and archived status. Includes current streak for each habit.',
+    {
+      frequency: z.enum(['daily', 'weekly', 'monthly']).optional().describe('Filter by frequency'),
+      archived: z.boolean().default(false).describe('Include archived habits (default: false = active only)'),
+      limit: z.number().int().min(1).max(100).default(50).describe('Max results (default: 50)'),
+      offset: z.number().int().min(0).default(0).describe('Offset for pagination'),
+    },
+    async ({ frequency, archived, limit, offset }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+      let query = supabase
+        .from('habits')
+        .select('id, name, frequency, description, color, reminder_time, archived, created_at', { count: 'exact' })
+        .eq('user_id', userId)
+        .eq('archived', archived)
+
+      if (frequency) query = query.eq('frequency', frequency)
+
+      const { data, count, error } = await query
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
+
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }], isError: true }
+
+      const habits = await Promise.all((data || []).map(async (h) => ({
+        habit_id: h.id,
+        name: h.name,
+        frequency: h.frequency,
+        description: h.description,
+        color: h.color,
+        reminder_time: h.reminder_time,
+        archived: h.archived,
+        current_streak: await calculateCurrentStreak(h.id),
+        created_at: toIST(new Date(h.created_at)),
+      })))
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ habits, total: count || 0, returned: habits.length }),
+        }],
+      }
+    }
+  )
+
   // ── create_habit ─────────────────────────────────────
   server.tool(
     'create_habit',
