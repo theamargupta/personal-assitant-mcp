@@ -68,7 +68,7 @@ supabase/
     004_finance_tracking.sql        # spending_categories, transactions tables
     005_goals.sql                   # goals, goal_milestones tables
     006_document_status.sql         # adds status column to wallet_documents
-    007_memory_vaults.sql           # memory_spaces, memory_items, memory_access_log + vector RPCs
+    007_memory_vaults.sql           # pa_memory_* tables + pa_match_memories (prefix: shared Supabase w/ memory-mcp)
 app/api/finance/
     transactions/route.ts           # POST + GET transactions
     transactions/[id]/route.ts      # PATCH + DELETE transaction
@@ -165,10 +165,10 @@ app/api/finance/
 - **goals** — title, goal_type (outcome/milestone), metric_type, target_value, is_recurring, recurrence, start_date, end_date, status
 - **goal_milestones** — goal_id, title, sort_order, completed, completed_at
 
-### Memory Vault Tables
-- **memory_spaces** — user-created vaults (name, slug, icon, settings)
-- **memory_items** — title, content, category, tags, project, embedding (vector 1536), temporal fields (valid_at, invalid_at), importance score, soft delete
-- **memory_access_log** — action, tool_name, query, memory_ids
+### Memory Vault Tables (prefixed `pa_` — coexist with memory-mcp `memories` / `memory_access_log` on same DB)
+- **pa_memory_spaces** — user-created vaults (name, slug, icon, settings)
+- **pa_memory_items** — title, content, category, tags, project, embedding (vector 1536), temporal fields (valid_at, invalid_at), importance score, soft delete
+- **pa_memory_access_log** — action, tool_name, query, memory_ids (PA MCP tool audit; not the memory-mcp log table)
 
 ### OAuth Tables
 - **mcp_oauth_clients** — client registration data

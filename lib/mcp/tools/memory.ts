@@ -19,7 +19,7 @@ function logAccess(userId: string, action: string, toolName: string, query?: str
   const supabase = createServiceRoleClient()
   void (async () => {
     try {
-      await supabase.from('memory_access_log').insert({
+      await supabase.from('pa_memory_access_log').insert({
         user_id: userId,
         action,
         tool_name: toolName,

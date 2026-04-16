@@ -5,7 +5,7 @@ export async function ensureDefaultSpaces(userId: string): Promise<void> {
   const supabase = createServiceRoleClient()
 
   const { count } = await supabase
-    .from('memory_spaces')
+    .from('pa_memory_spaces')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
 
@@ -19,7 +19,7 @@ export async function ensureDefaultSpaces(userId: string): Promise<void> {
     icon: space.icon,
   }))
 
-  await supabase.from('memory_spaces').insert(rows)
+  await supabase.from('pa_memory_spaces').insert(rows)
 }
 
 export async function resolveSpaceId(
@@ -29,7 +29,7 @@ export async function resolveSpaceId(
   const supabase = createServiceRoleClient()
 
   const { data } = await supabase
-    .from('memory_spaces')
+    .from('pa_memory_spaces')
     .select('id')
     .eq('user_id', userId)
     .eq('slug', slug)
@@ -48,7 +48,7 @@ export async function createSpace(
   const supabase = createServiceRoleClient()
 
   const { data, error } = await supabase
-    .from('memory_spaces')
+    .from('pa_memory_spaces')
     .insert({
       user_id: userId,
       name: name.trim(),
@@ -67,7 +67,7 @@ export async function listSpaces(userId: string): Promise<MemorySpace[]> {
   const supabase = createServiceRoleClient()
 
   const { data } = await supabase
-    .from('memory_spaces')
+    .from('pa_memory_spaces')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: true })

@@ -52,13 +52,13 @@ export default function MemoryPage() {
     if (!user) { setLoading(false); return }
 
     let { data: spacesData } = await supabase
-      .from('memory_spaces')
+      .from('pa_memory_spaces')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
 
     if (!spacesData?.length) {
-      await supabase.from('memory_spaces').insert(
+      await supabase.from('pa_memory_spaces').insert(
         DEFAULT_SPACES.map((s) => ({
           user_id: user.id,
           name: s.name,
@@ -68,7 +68,7 @@ export default function MemoryPage() {
         }))
       )
       const refetch = await supabase
-        .from('memory_spaces')
+        .from('pa_memory_spaces')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true })
@@ -85,7 +85,7 @@ export default function MemoryPage() {
     }
 
     let query = supabase
-      .from('memory_items')
+      .from('pa_memory_items')
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
@@ -120,7 +120,7 @@ export default function MemoryPage() {
 
     if (editingMemory) {
       await supabase
-        .from('memory_items')
+        .from('pa_memory_items')
         .update({
           title: formTitle.trim(),
           content: formContent.trim(),
@@ -132,7 +132,7 @@ export default function MemoryPage() {
         .eq('id', editingMemory.id)
     } else {
       await supabase
-        .from('memory_items')
+        .from('pa_memory_items')
         .insert({
           space_id: space?.id,
           user_id: user.id,
@@ -152,7 +152,7 @@ export default function MemoryPage() {
   const handleDelete = async (id: string) => {
     const supabase = createClient()
     await supabase
-      .from('memory_items')
+      .from('pa_memory_items')
       .update({ is_active: false, invalid_at: new Date().toISOString() })
       .eq('id', id)
     void loadData()

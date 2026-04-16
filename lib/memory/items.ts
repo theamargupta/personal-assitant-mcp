@@ -24,7 +24,7 @@ export async function saveMemory(params: {
 
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase
-    .from('memory_items')
+    .from('pa_memory_items')
     .insert({
       space_id: spaceId,
       user_id: userId,
@@ -58,7 +58,7 @@ export async function searchMemories(params: {
   const queryEmbedding = await generateEmbedding(query)
 
   const supabase = createServiceRoleClient()
-  const { data, error } = await supabase.rpc('match_memories', {
+  const { data, error } = await supabase.rpc('pa_match_memories', {
     query_embedding: JSON.stringify(queryEmbedding),
     filter_user_id: userId,
     filter_space_slug: spaceSlug || null,
@@ -75,7 +75,7 @@ export async function searchMemories(params: {
   if (ids.length > 0) {
     void (async () => {
       try {
-        await supabase.rpc('increment_memory_importance', { memory_ids: ids, boost: 0.1 })
+        await supabase.rpc('pa_increment_memory_importance', { memory_ids: ids, boost: 0.1 })
       } catch {
         /* non-fatal */
       }
@@ -100,8 +100,8 @@ export async function listMemories(params: {
 
   const supabase = createServiceRoleClient()
   let query = supabase
-    .from('memory_items')
-    .select('*, memory_spaces!inner(slug)')
+    .from('pa_memory_items')
+    .select('*, pa_memory_spaces!inner(slug)')
     .eq('user_id', userId)
     .eq('is_active', true)
     .is('invalid_at', null)
@@ -109,7 +109,7 @@ export async function listMemories(params: {
     .range(offset, offset + limit - 1)
 
   if (spaceSlug) {
-    query = query.eq('memory_spaces.slug', spaceSlug)
+    query = query.eq('pa_memory_spaces.slug', spaceSlug)
   }
   if (category) {
     query = query.eq('category', category)
@@ -132,7 +132,7 @@ export async function getMemory(
   const supabase = createServiceRoleClient()
 
   const { data } = await supabase
-    .from('memory_items')
+    .from('pa_memory_items')
     .select('*')
     .eq('id', memoryId)
     .eq('user_id', userId)
@@ -181,7 +181,7 @@ export async function updateMemory(params: {
   }
 
   const { data, error } = await supabase
-    .from('memory_items')
+    .from('pa_memory_items')
     .update(updates)
     .eq('id', memoryId)
     .eq('user_id', userId)
@@ -200,7 +200,7 @@ export async function deleteMemory(
   const supabase = createServiceRoleClient()
 
   const { error } = await supabase
-    .from('memory_items')
+    .from('pa_memory_items')
     .update({
       is_active: false,
       invalid_at: new Date().toISOString(),
@@ -219,7 +219,7 @@ export async function getContext(
   const supabase = createServiceRoleClient()
 
   const { data } = await supabase
-    .from('memory_items')
+    .from('pa_memory_items')
     .select('*')
     .eq('user_id', userId)
     .eq('project', project)
@@ -238,7 +238,7 @@ export async function getRules(
   const supabase = createServiceRoleClient()
 
   let query = supabase
-    .from('memory_items')
+    .from('pa_memory_items')
     .select('*')
     .eq('user_id', userId)
     .eq('category', 'rule')
