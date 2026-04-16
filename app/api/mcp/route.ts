@@ -9,7 +9,7 @@ import {
 
 export async function GET() {
   return NextResponse.json({
-    name: 'pa-mcp',
+    name: 'sathi',
     version: '0.1.0',
     protocol: 'mcp',
     status: 'ok',
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   try {
     authInfo = await verifyOAuthAccessToken(bearerToken)
   } catch (error) {
-    console.error('[PA-MCP] oauth auth failed', error)
+    console.error('[SATHI] oauth auth failed', error)
     return NextResponse.json(
       { error: 'invalid_token', error_description: error instanceof Error ? error.message : 'Invalid token.' },
       {
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (error) {
-    console.error('PA-MCP Error:', error)
+    console.error('SATHI Error:', error)
     return NextResponse.json(
       { error: 'Internal Server Error', message: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

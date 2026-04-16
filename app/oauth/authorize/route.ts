@@ -97,7 +97,7 @@ async function authorizeOrError(
       { status: 303 }
     )
   } catch (error) {
-    console.error('[PA-MCP OAuth] authorize failed', error)
+    console.error('[SATHI OAuth] authorize failed', error)
     return NextResponse.redirect(
       buildRedirectUri(redirectUri, {
         error: 'invalid_request',
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Authorize ${escapeHtml(clientName)} — PA MCP</title>
+    <title>Authorize ${escapeHtml(clientName)} — Sathi</title>
     <style>
       :root { color-scheme: dark; }
       body {
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
   <body>
     <form class="card" method="post">
       <h1>Authorize ${escapeHtml(clientName)}</h1>
-      <p>Confirm access so ${escapeHtml(clientName)} can connect to your Personal Assistant MCP tools.</p>
+      <p>Confirm access so ${escapeHtml(clientName)} can connect to your Sathi personal assistant tools.</p>
       <div class="meta"><strong>Signed in as</strong><code>${escapeHtml(user.email || '')}</code></div>
       <div class="meta"><strong>Requested scope</strong><code>${escapeHtml(scopeText)}</code></div>
       <div class="meta"><strong>Resource</strong><code>${escapeHtml(resourceText)}</code></div>

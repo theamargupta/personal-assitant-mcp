@@ -82,9 +82,9 @@ export function FooterCTA() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <div className="h-6 w-6 rounded-md bg-neon flex items-center justify-center">
-                <span className="text-[9px] font-bold text-bg-primary leading-none">PA</span>
+                <span className="text-[9px] font-bold text-bg-primary leading-none">S</span>
               </div>
-              <span className="text-[13px] font-semibold text-text-primary">PA MCP</span>
+              <span className="text-[13px] font-semibold text-text-primary">Sathi</span>
             </div>
             <p className="text-[12px] text-text-muted leading-relaxed max-w-[180px]">
               Your AI-powered personal assistant, built on the Model Context Protocol.

@@ -3,11 +3,11 @@ import { GeistSans } from 'geist/font/sans'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'PA MCP — Your AI Personal Assistant',
+  title: 'Sathi — Personal Assistant',
   description: 'Track habits, manage tasks, store documents, monitor spending, set goals — and ask Claude anything about your life.',
   openGraph: {
-    title: 'PA MCP — Your AI Personal Assistant',
-    description: 'One MCP to rule them all. Habits, Tasks, Documents, Finance, Goals — powered by Claude.',
+    title: 'Sathi — Personal Assistant',
+    description: 'One companion to rule them all. Habits, Tasks, Documents, Finance, Goals — powered by Claude.',
     type: 'website',
   },
 }

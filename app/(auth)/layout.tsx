@@ -12,9 +12,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2.5 mb-10 relative z-10">
         <div className="h-8 w-8 rounded-lg bg-neon flex items-center justify-center">
-          <span className="text-[12px] font-bold text-bg-primary leading-none">PA</span>
+          <span className="text-[12px] font-bold text-bg-primary leading-none">S</span>
         </div>
-        <span className="text-[16px] font-semibold text-text-primary tracking-[-0.01em]">PA MCP</span>
+        <span className="text-[16px] font-semibold text-text-primary tracking-[-0.01em]">Sathi</span>
       </Link>
 
       <div className="relative z-10 w-full flex items-center justify-center">

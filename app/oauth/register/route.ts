@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(client, { status: 201 })
   } catch (error) {
-    console.error('[PA-MCP OAuth] register failed', error)
+    console.error('[SATHI OAuth] register failed', error)
     return NextResponse.json(
       {
         error: 'invalid_client_metadata',

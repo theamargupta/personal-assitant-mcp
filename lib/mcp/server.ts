@@ -9,7 +9,7 @@ import { registerWidgetResources } from '@/lib/mcp/widgets'
 
 export function createMcpServer() {
   const server = new McpServer({
-    name: 'pa-mcp',
+    name: 'sathi',
     version: '0.1.0',
   })
 

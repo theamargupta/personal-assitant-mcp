@@ -40,10 +40,10 @@ export function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5">
           <div className="h-7 w-7 rounded-md bg-neon flex items-center justify-center">
-            <span className="text-[11px] font-bold text-bg-primary leading-none">PA</span>
+            <span className="text-[11px] font-bold text-bg-primary leading-none">S</span>
           </div>
           <span className="text-[15px] font-semibold text-text-primary tracking-[-0.01em]">
-            PA MCP
+            Sathi
           </span>
         </Link>
 

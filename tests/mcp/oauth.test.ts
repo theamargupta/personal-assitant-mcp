@@ -23,11 +23,11 @@ import {
   verifyOAuthAccessToken,
 } from '@/lib/mcp/oauth'
 
-const ORIGIN = 'https://pa-mcp.devfrend.com'
+const ORIGIN = 'https://sathi.devfrend.com'
 
 describe('buildMcpResourceUrl', () => {
   it('builds correct URL', () => {
-    expect(buildMcpResourceUrl(ORIGIN)).toBe('https://pa-mcp.devfrend.com/api/mcp')
+    expect(buildMcpResourceUrl(ORIGIN)).toBe('https://sathi.devfrend.com/api/mcp')
   })
 
   it('handles trailing slash', () => {
@@ -38,11 +38,11 @@ describe('buildMcpResourceUrl', () => {
 describe('buildProtectedResourceMetadata', () => {
   it('returns correct metadata shape', () => {
     const meta = buildProtectedResourceMetadata(ORIGIN)
-    expect(meta.resource).toBe('https://pa-mcp.devfrend.com/api/mcp')
+    expect(meta.resource).toBe('https://sathi.devfrend.com/api/mcp')
     expect(meta.authorization_servers).toEqual([ORIGIN])
     expect(meta.scopes_supported).toEqual(['mcp:tools'])
     expect(meta.bearer_methods_supported).toEqual(['header'])
-    expect(meta.resource_name).toBe('PA MCP - Personal Assistant')
+    expect(meta.resource_name).toBe('Sathi — Personal Assistant')
   })
 })
 
@@ -65,7 +65,7 @@ describe('buildOAuthMetadata', () => {
 describe('buildResourceMetadataUrl', () => {
   it('builds correct well-known URL', () => {
     expect(buildResourceMetadataUrl(ORIGIN))
-      .toBe('https://pa-mcp.devfrend.com/.well-known/oauth-protected-resource/api/mcp')
+      .toBe('https://sathi.devfrend.com/.well-known/oauth-protected-resource/api/mcp')
   })
 })
 

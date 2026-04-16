@@ -56,7 +56,7 @@ export function ChatAnimation() {
         {/* Header */}
         <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
           <div className="w-2 h-2 rounded-full bg-neon" />
-          <span className="text-[11px] text-text-muted font-medium uppercase tracking-[0.15em]">Claude + PA MCP</span>
+          <span className="text-[11px] text-text-muted font-medium uppercase tracking-[0.15em]">Claude + Sathi</span>
         </div>
 
         {/* User message */}

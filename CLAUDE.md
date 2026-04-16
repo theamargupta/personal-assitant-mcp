@@ -1,8 +1,8 @@
-# PA MCP — Personal Assistant MCP Server
+# Sathi — Personal Assistant MCP Server
 
 ## Overview
 
-A Personal Assistant MCP (Model Context Protocol) Server that provides Claude and other AI assistants with structured tools for managing habits and tasks. Deployed on Vercel at `pa-mcp.devfrend.com`.
+Sathi is a Personal Assistant MCP (Model Context Protocol) Server that provides Claude and other AI assistants with structured tools for managing habits and tasks. Deployed on Vercel at `sathi.devfrend.com`.
 
 **Version:** 0.1.0
 **Jira Epic:** [PA-1](https://theamarguptatech.atlassian.net/browse/PA-1) (In Progress)
@@ -175,7 +175,7 @@ app/api/finance/
 ### Memory Vault Tables (prefixed `pa_` — coexist with memory-mcp `memories` / `memory_access_log` on same DB)
 - **pa_memory_spaces** — user-created vaults (name, slug, icon, settings)
 - **pa_memory_items** — title, content, category, tags, project, embedding (vector 1536), **search_vector** (`tsvector`, maintained by trigger for hybrid search), temporal fields (valid_at, invalid_at), importance score, soft delete
-- **pa_memory_access_log** — action, tool_name, query, memory_ids (PA MCP tool audit; not the memory-mcp log table)
+- **pa_memory_access_log** — action, tool_name, query, memory_ids (Sathi tool audit; not the memory-mcp log table)
 - **RPC** — `pa_match_memories` (vector KNN; duplicate detection uses threshold **0.9**; requires row embedding), `pa_hybrid_search` (weighted semantic + keyword scores; see migration `008_memory_hybrid_search.sql`)
 
 ### OAuth Tables

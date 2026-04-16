@@ -94,7 +94,7 @@ export function buildProtectedResourceMetadata(origin: string): OAuthProtectedRe
     authorization_servers: [origin],
     scopes_supported: SUPPORTED_SCOPES,
     bearer_methods_supported: ['header'],
-    resource_name: 'PA MCP - Personal Assistant',
+    resource_name: 'Sathi — Personal Assistant',
     resource_documentation: new URL('/settings/connections', origin).toString(),
   }
 }

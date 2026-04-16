@@ -80,7 +80,7 @@ export default function SignupPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-[22px] font-bold text-text-primary tracking-[-0.02em]">Create account</h1>
-          <p className="text-text-muted text-[13px] mt-1.5">Get started with PA MCP</p>
+          <p className="text-text-muted text-[13px] mt-1.5">Get started with Sathi</p>
         </div>
 
         {/* Google sign-up */}

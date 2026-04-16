@@ -26,15 +26,16 @@ export async function GET(request: NextRequest, { params }: Params) {
   }
 
   let viewUrl: string | null = null
+  let viewError: string | null = null
   try {
     if (doc.status === 'ready' || doc.status === 'pending') {
       viewUrl = await getSignedUrl(doc.storage_path, 3600)
     }
-  } catch {
-    viewUrl = null
+  } catch (error) {
+    viewError = error instanceof Error ? error.message : 'Signed URL failed'
   }
 
-  return NextResponse.json({ document: doc, view_url: viewUrl })
+  return NextResponse.json({ document: doc, view_url: viewUrl, view_error: viewError })
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {

@@ -6,7 +6,7 @@ const steps = [
   {
     num: '01',
     title: 'Connect',
-    desc: 'Add PA MCP to Claude Desktop or claude.ai. One-click OAuth — you\'re in.',
+    desc: 'Add Sathi to Claude Desktop or claude.ai. One-click OAuth — you\'re in.',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />

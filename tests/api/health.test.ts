@@ -8,7 +8,7 @@ describe('GET /api/health', () => {
 
     expect(response.status).toBe(200)
     expect(body.status).toBe('ok')
-    expect(body.service).toBe('pa-mcp')
+    expect(body.service).toBe('sathi')
     expect(body.version).toBe('0.1.0')
     expect(body.timestamp).toBeTruthy()
   })

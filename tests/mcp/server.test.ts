@@ -67,7 +67,7 @@ import { createMcpServer } from '@/lib/mcp/server'
 describe('createMcpServer', () => {
   it('creates a server with correct name and version', () => {
     const server = createMcpServer() as unknown as { name: string; version: string }
-    expect(server.name).toBe('pa-mcp')
+    expect(server.name).toBe('sathi')
     expect(server.version).toBe('0.1.0')
   })
 

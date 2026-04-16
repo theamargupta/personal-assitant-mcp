@@ -38,9 +38,9 @@ export function Sidebar() {
       <div className="px-6 py-5 border-b border-white/[0.04]">
         <Link href="/" className="flex items-center gap-3">
           <div className="h-7 w-7 rounded-md bg-neon flex items-center justify-center">
-            <span className="text-[11px] font-bold text-bg-primary leading-none">PA</span>
+            <span className="text-[11px] font-bold text-bg-primary leading-none">S</span>
           </div>
-          <span className="text-[15px] font-semibold text-text-primary">PA MCP</span>
+          <span className="text-[15px] font-semibold text-text-primary">Sathi</span>
         </Link>
       </div>
 

@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   } catch (error) {
-    console.error('[PA-MCP OAuth] token failed', error)
+    console.error('[SATHI OAuth] token failed', error)
     return NextResponse.json(
       {
         error: 'invalid_grant',

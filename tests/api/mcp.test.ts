@@ -53,7 +53,7 @@ describe('GET /api/mcp', () => {
 
     expect(response.status).toBe(200)
     expect(body).toEqual({
-      name: 'pa-mcp',
+      name: 'sathi',
       version: '0.1.0',
       protocol: 'mcp',
       status: 'ok',
@@ -110,7 +110,7 @@ describe('POST /api/mcp', () => {
       error_description: 'Invalid access token',
     })
     expect(response.headers.get('WWW-Authenticate')).toContain('Invalid access token')
-    expect(consoleError).toHaveBeenCalledWith('[PA-MCP] oauth auth failed', expect.any(Error))
+    expect(consoleError).toHaveBeenCalledWith('[SATHI] oauth auth failed', expect.any(Error))
     consoleError.mockRestore()
   })
 
@@ -128,7 +128,7 @@ describe('POST /api/mcp', () => {
       error_description: 'Invalid token.',
     })
     expect(response.headers.get('WWW-Authenticate')).toContain('Invalid token.')
-    expect(consoleError).toHaveBeenCalledWith('[PA-MCP] oauth auth failed', 'not-an-error')
+    expect(consoleError).toHaveBeenCalledWith('[SATHI] oauth auth failed', 'not-an-error')
     consoleError.mockRestore()
   })
 
@@ -229,7 +229,7 @@ describe('POST /api/mcp', () => {
       error: 'Internal Server Error',
       message: 'Transport failed',
     })
-    expect(consoleError).toHaveBeenCalledWith('PA-MCP Error:', expect.any(Error))
+    expect(consoleError).toHaveBeenCalledWith('SATHI Error:', expect.any(Error))
     consoleError.mockRestore()
   })
 
@@ -252,7 +252,7 @@ describe('POST /api/mcp', () => {
       error: 'Internal Server Error',
       message: 'Unknown error',
     })
-    expect(consoleError).toHaveBeenCalledWith('PA-MCP Error:', 'transport failed')
+    expect(consoleError).toHaveBeenCalledWith('SATHI Error:', 'transport failed')
     consoleError.mockRestore()
   })
 })
