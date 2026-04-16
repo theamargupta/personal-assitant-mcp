@@ -112,10 +112,22 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('get_goal_progress')
     expect(toolNames).toContain('get_review')
     expect(toolNames).toContain('add_milestone')
+
+    // Memory tools (10)
+    expect(toolNames).toContain('save_memory')
+    expect(toolNames).toContain('search_memory')
+    expect(toolNames).toContain('list_memories')
+    expect(toolNames).toContain('get_memory')
+    expect(toolNames).toContain('update_memory')
+    expect(toolNames).toContain('delete_memory')
+    expect(toolNames).toContain('get_context')
+    expect(toolNames).toContain('get_rules')
+    expect(toolNames).toContain('create_space')
+    expect(toolNames).toContain('list_spaces')
   })
 
-  it('registers exactly 28 tools total', () => {
+  it('registers exactly 38 tools total', () => {
     const server = createMcpServer() as unknown as { tools: Array<{ name: string }> }
-    expect(server.tools).toHaveLength(28)
+    expect(server.tools).toHaveLength(38)
   })
 })

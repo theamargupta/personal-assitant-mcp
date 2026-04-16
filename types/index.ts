@@ -202,3 +202,7 @@ export interface PeriodReview {
   }
   highlights: ReviewHighlights
 }
+
+// ============ MEMORY TYPES ============
+
+export type { MemoryCategory, MemorySource, MemorySpace, MemoryItem } from '@/lib/memory/types'

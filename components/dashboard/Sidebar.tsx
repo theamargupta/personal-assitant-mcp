@@ -12,6 +12,7 @@ const navItems = [
   { href: '/dashboard/finance', icon: '💰', label: 'Finance' },
   { href: '/dashboard/documents', icon: '📄', label: 'Documents' },
   { href: '/dashboard/goals', icon: '🎯', label: 'Goals' },
+  { href: '/dashboard/memory', icon: '🧠', label: 'Memory' },
 ]
 
 export function Sidebar() {

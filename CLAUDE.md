@@ -43,10 +43,18 @@ lib/
       documents.ts                  # 5 document wallet tools
       finance.ts                    # 4 finance tools
       goals.ts                      # 6 goal tools (create, list, update, progress, review, milestone)
+      memory.ts                     # 10 memory vault tools (spaces, CRUD, semantic search)
+  memory/
+    types.ts                        # Zod schemas + MemorySpace / MemoryItem types
+    spaces.ts                       # Auto-seed default spaces, resolve space by slug
+    items.ts                        # save/search/list CRUD, get_context, get_rules
   finance/
     auth.ts                         # Supabase Auth bearer token verification
     categories.ts                   # Category CRUD + preset seeding
     transactions.ts                 # Transaction CRUD + summary queries
+  goals/
+    goals.ts                        # Goal CRUD + progress computation from linked data
+    review.ts                       # Cross-module aggregation: habits + tasks + finance + goals → review
   supabase/
     server.ts                       # Server-side Supabase client (SSR)
     service-role.ts                 # Service role client for backend ops
@@ -60,10 +68,7 @@ supabase/
     004_finance_tracking.sql        # spending_categories, transactions tables
     005_goals.sql                   # goals, goal_milestones tables
     006_document_status.sql         # adds status column to wallet_documents
-lib/
-  goals/
-    goals.ts                        # Goal CRUD + progress computation from linked data
-    review.ts                       # Cross-module aggregation: habits + tasks + finance + goals → review
+    007_memory_vaults.sql           # memory_spaces, memory_items, memory_access_log + vector RPCs
 app/api/finance/
     transactions/route.ts           # POST + GET transactions
     transactions/[id]/route.ts      # PATCH + DELETE transaction
@@ -126,6 +131,21 @@ app/api/finance/
 | `get_review` | Comprehensive period review: habits + tasks + finance + goals + highlights |
 | `add_milestone` | Add sub-steps to milestone-type goals |
 
+### Memory Tools (10)
+
+| Tool | Description |
+|------|-------------|
+| `save_memory` | Store a new memory with category, tags, project scope |
+| `search_memory` | Semantic search across memories (vector similarity) |
+| `list_memories` | Browse with filters (space, category, project, tag) |
+| `get_memory` | Get by ID |
+| `update_memory` | PATCH semantics update |
+| `delete_memory` | Soft delete (is_active=false, invalid_at=now) |
+| `get_context` | All memories for a project — instant onboarding |
+| `get_rules` | All rule-category memories |
+| `create_space` | Create new memory space/vault |
+| `list_spaces` | List all spaces |
+
 ## Database Schema
 
 ### Core Tables
@@ -144,6 +164,11 @@ app/api/finance/
 ### Goal Tables
 - **goals** — title, goal_type (outcome/milestone), metric_type, target_value, is_recurring, recurrence, start_date, end_date, status
 - **goal_milestones** — goal_id, title, sort_order, completed, completed_at
+
+### Memory Vault Tables
+- **memory_spaces** — user-created vaults (name, slug, icon, settings)
+- **memory_items** — title, content, category, tags, project, embedding (vector 1536), temporal fields (valid_at, invalid_at), importance score, soft delete
+- **memory_access_log** — action, tool_name, query, memory_ids
 
 ### OAuth Tables
 - **mcp_oauth_clients** — client registration data
