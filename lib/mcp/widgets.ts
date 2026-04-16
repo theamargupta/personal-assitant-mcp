@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
-const require = createRequire(import.meta.url)
+const EXT_APPS_BUNDLE_PATH = join(
+  process.cwd(),
+  'node_modules/@modelcontextprotocol/ext-apps/dist/src/app-with-deps.js',
+)
 
 let extAppsBundle: string | null = null
 
@@ -12,10 +14,7 @@ function getBundle(): string {
   if (extAppsBundle) return extAppsBundle
 
   try {
-    const raw = readFileSync(
-      require.resolve('@modelcontextprotocol/ext-apps/app-with-deps'),
-      'utf8',
-    )
+    const raw = readFileSync(EXT_APPS_BUNDLE_PATH, 'utf8')
     extAppsBundle = raw.replace(/export\{([^}]+)\};?\s*$/, (_, body) =>
       'globalThis.ExtApps={' +
       body.split(',').map((part: string) => {
