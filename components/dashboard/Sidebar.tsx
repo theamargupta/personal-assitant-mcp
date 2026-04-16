@@ -13,6 +13,7 @@ const navItems = [
   { href: '/dashboard/documents', icon: '📄', label: 'Documents' },
   { href: '/dashboard/goals', icon: '🎯', label: 'Goals' },
   { href: '/dashboard/memory', icon: '🧠', label: 'Memory' },
+  { href: '/dashboard/profile', icon: '👤', label: 'Profile' },
 ]
 
 export function Sidebar() {
