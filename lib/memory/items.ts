@@ -41,9 +41,10 @@ export async function saveMemory(params: {
   category: MemoryCategory
   tags: string[]
   project?: string
+  importance?: number
   force?: boolean
 }): Promise<SaveMemoryResult> {
-  const { userId, spaceSlug, title, content, category, tags, project, force = false } = params
+  const { userId, spaceSlug, title, content, category, tags, project, importance = 5, force = false } = params
 
   await ensureDefaultSpaces(userId)
 
@@ -111,6 +112,7 @@ export async function saveMemory(params: {
       tags,
       project: project?.trim() || null,
       embedding: JSON.stringify(embedding),
+      importance,
       source: 'manual',
     })
     .select()

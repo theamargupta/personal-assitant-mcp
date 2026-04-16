@@ -63,6 +63,36 @@ export async function createSpace(
   return data as MemorySpace
 }
 
+export async function deleteSpace(
+  userId: string,
+  slug: string
+): Promise<void> {
+  if (['personal', 'projects'].includes(slug)) {
+    throw new Error(`Cannot delete default space "${slug}"`)
+  }
+
+  const supabase = createServiceRoleClient()
+
+  // Verify the space exists and belongs to the user
+  const { data: space } = await supabase
+    .from('pa_memory_spaces')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (!space) throw new Error(`Space "${slug}" not found`)
+
+  // Delete the space — pa_memory_items CASCADE will remove all memories in it
+  const { error } = await supabase
+    .from('pa_memory_spaces')
+    .delete()
+    .eq('id', space.id)
+    .eq('user_id', userId)
+
+  if (error) throw new Error(`Failed to delete space: ${error.message}`)
+}
+
 export async function listSpaces(userId: string): Promise<MemorySpace[]> {
   const supabase = createServiceRoleClient()
 

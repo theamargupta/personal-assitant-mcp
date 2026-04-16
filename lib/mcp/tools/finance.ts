@@ -46,7 +46,7 @@ export function registerFinanceTools(server: McpServer) {
           type: 'text' as const,
           text: JSON.stringify(response),
         },
-          createSpendingChartImage({
+          await createSpendingChartImage({
             totalSpent: response.total_spent,
             period: response.period,
             breakdown: response.breakdown,

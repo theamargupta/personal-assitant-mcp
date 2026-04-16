@@ -32,8 +32,14 @@ function getBundle(): string {
 
 function loadWidget(filename: string): string {
   const widgetPath = join(process.cwd(), 'widgets', filename)
-  const html = readFileSync(widgetPath, 'utf8')
-  return html.replace('/*__EXT_APPS_BUNDLE__*/', () => getBundle())
+  try {
+    const html = readFileSync(widgetPath, 'utf8')
+    console.log(`[widget] served ${filename}: ${html.length} bytes`)
+    return html.replace('/*__EXT_APPS_BUNDLE__*/', () => getBundle())
+  } catch (err) {
+    console.error(`[widget] failed to read ${widgetPath}:`, err)
+    throw err
+  }
 }
 
 interface WidgetDef {

@@ -315,7 +315,7 @@ export function registerHabitTools(server: McpServer) {
           type: 'text' as const,
           text: JSON.stringify(response),
         },
-          createHabitHeatmapImage({
+          await createHabitHeatmapImage({
             name: response.name,
             periodDays: response.period_days,
             completionPercentage: response.completion_percentage,

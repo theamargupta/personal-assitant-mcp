@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
-    '/api/mcp': ['./widgets/**/*'],
+    '/app/api/mcp': ['./widgets/**/*.html'],
   },
 };
 

@@ -1,3 +1,29 @@
+import { Resvg, initWasm } from '@resvg/resvg-wasm'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
+
+let wasmInitialized = false
+
+async function ensureWasm() {
+  if (wasmInitialized) return
+  try {
+    const wasmPath = join(process.cwd(), 'node_modules/@resvg/resvg-wasm/index_bg.wasm')
+    const wasmBuffer = await readFile(wasmPath)
+    await initWasm(wasmBuffer)
+  } catch {
+    // Already initialized in this isolate
+  }
+  wasmInitialized = true
+}
+
+async function svgToPng(svg: string, width: number): Promise<string> {
+  await ensureWasm()
+  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: width * 2 } })
+  const rendered = resvg.render()
+  const pngBuffer = rendered.asPng()
+  return Buffer.from(pngBuffer).toString('base64')
+}
+
 interface HabitHeatmapDay {
   date: string
   completed: boolean
@@ -19,11 +45,7 @@ function escapeXml(value: string): string {
     .replace(/'/g, '&apos;')
 }
 
-function svgToBase64(svg: string): string {
-  return Buffer.from(svg, 'utf8').toString('base64')
-}
-
-export function createHabitHeatmapImage(data: {
+export async function createHabitHeatmapImage(data: {
   name: string
   periodDays: number
   completionPercentage: number
@@ -70,12 +92,12 @@ export function createHabitHeatmapImage(data: {
 
   return {
     type: 'image' as const,
-    data: svgToBase64(svg),
-    mimeType: 'image/svg+xml',
+    data: await svgToPng(svg, width),
+    mimeType: 'image/png',
   }
 }
 
-export function createSpendingChartImage(data: {
+export async function createSpendingChartImage(data: {
   totalSpent: number
   period: { start: string; end: string }
   breakdown: SpendingBreakdownRow[]
@@ -105,7 +127,7 @@ export function createSpendingChartImage(data: {
 
   return {
     type: 'image' as const,
-    data: svgToBase64(svg),
-    mimeType: 'image/svg+xml',
+    data: await svgToPng(svg, width),
+    mimeType: 'image/png',
   }
 }

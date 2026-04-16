@@ -13,7 +13,7 @@ import {
   getRules,
   consolidateMemories,
 } from '@/lib/memory/items'
-import { createSpace, listSpaces } from '@/lib/memory/spaces'
+import { createSpace, listSpaces, deleteSpace } from '@/lib/memory/spaces'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { MemoryCategoryEnum } from '@/lib/memory/types'
 import { WIDGET_URIS } from '@/lib/mcp/widgets'
@@ -51,11 +51,12 @@ export function registerMemoryTools(server: McpServer) {
         category: MemoryCategoryEnum.default('note').describe('Category (default: note)'),
         tags: z.array(z.string()).default([]).describe('Tags for organizing'),
         project: z.string().optional().describe('Optional project scope'),
+        importance: z.number().min(0).max(10).default(5).describe('Importance score 0–10 (default: 5). Higher = more weight in search ranking.'),
         force: z.boolean().default(false).describe('Skip duplicate check and save directly'),
       },
       _meta: { ui: { resourceUri: WIDGET_URIS.memorySearch } },
     },
-    async ({ space, title, content, category, tags, project, force }, { authInfo }) => {
+    async ({ space, title, content, category, tags, project, importance, force }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
       if (!userId) throw new Error('Unauthorized')
 
@@ -68,6 +69,7 @@ export function registerMemoryTools(server: McpServer) {
           category,
           tags,
           project,
+          importance,
           force,
         })
 
@@ -521,6 +523,35 @@ export function registerMemoryTools(server: McpServer) {
             count: spaces.length,
           }),
         }],
+      }
+    }
+  )
+
+  // ── delete_space ────────────────────────────────────────
+
+  server.tool(
+    'delete_space',
+    'Delete a memory space and all its memories. Cannot delete default spaces (personal, projects).',
+    {
+      slug: z.string().min(1).max(50).describe('Slug of the space to delete'),
+    },
+    async ({ slug }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        await deleteSpace(userId, slug)
+        logAccess(userId, 'delete_space', 'delete_space', slug)
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({ deleted: true, slug }),
+          }],
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true }
       }
     }
   )
