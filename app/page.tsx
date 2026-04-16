@@ -1,6 +1,8 @@
 import { Navbar } from '@/components/landing/Navbar'
 import { Hero } from '@/components/landing/Hero'
-import { Features } from '@/components/landing/Features'
+import { WorksWith } from '@/components/landing/WorksWith'
+import { BentoShowcase } from '@/components/landing/BentoShowcase'
+import { ConversationExamples } from '@/components/landing/ConversationExamples'
 import { HowItWorks } from '@/components/landing/HowItWorks'
 import { ReviewShowcase } from '@/components/landing/ReviewShowcase'
 import { TechStrip } from '@/components/landing/TechStrip'
@@ -11,7 +13,9 @@ export default function Home() {
     <main className="min-h-screen bg-bg-primary">
       <Navbar />
       <Hero />
-      <Features />
+      <WorksWith />
+      <BentoShowcase />
+      <ConversationExamples />
       <HowItWorks />
       <ReviewShowcase />
       <TechStrip />

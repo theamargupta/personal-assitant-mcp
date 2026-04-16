@@ -271,8 +271,11 @@ export function registerHabitTools(server: McpServer) {
         return { content: [{ type: 'text' as const, text: 'Error: Habit not found' }], isError: true }
       }
 
-      const since = new Date()
-      since.setDate(since.getDate() - days)
+      // Use IST today to avoid UTC boundary issues
+      const todayStr = todayISTDate()
+      const today = new Date(todayStr + 'T00:00:00+05:30')
+      const since = new Date(today)
+      since.setDate(since.getDate() - (days - 1)) // -29 for 30-day range that includes today
       const sinceStr = since.toISOString().split('T')[0]
 
       const { data: logs } = await supabase
@@ -286,7 +289,7 @@ export function registerHabitTools(server: McpServer) {
       const totalCompletions = loggedDates.size
       const pct = Math.round((totalCompletions / days) * 100 * 10) / 10
 
-      // Build day-by-day breakdown
+      // Build day-by-day breakdown (since → today inclusive)
       const dayByDay: { date: string; completed: boolean }[] = []
       for (let i = 0; i < days; i++) {
         const d = new Date(since)

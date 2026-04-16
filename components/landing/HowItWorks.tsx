@@ -8,7 +8,7 @@ const steps = [
     title: 'Connect',
     desc: 'Add PA MCP to Claude Desktop or claude.ai. One-click OAuth — you\'re in.',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
         <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
       </svg>
@@ -19,7 +19,7 @@ const steps = [
     title: 'Track',
     desc: 'Habits, tasks, documents, spending — everything flows in through natural conversation.',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22,12 18,12 15,21 9,3 6,12 2,12" />
       </svg>
     ),
@@ -29,7 +29,7 @@ const steps = [
     title: 'Ask',
     desc: 'Kitna kharch hua? My streak? April review do — Claude knows everything about your life.',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
       </svg>
     ),
@@ -37,11 +37,10 @@ const steps = [
 ]
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 28, filter: 'blur(8px)' },
+  hidden: { opacity: 0, y: 28 },
   show: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
   },
 }
@@ -63,14 +62,14 @@ export function HowItWorks() {
           </span>
           <h2 className="text-[clamp(2rem,4.5vw,3.25rem)] font-bold tracking-[-0.03em] leading-[1] [text-wrap:balance]">
             Three steps to{' '}
-            <span className="gradient-text-premium">clarity</span>
+            <span className="text-neon">clarity</span>
           </h2>
         </motion.div>
 
         {/* Steps */}
         <div className="relative">
-          {/* Vertical timeline line */}
-          <div className="absolute left-[27px] top-0 bottom-0 w-px bg-gradient-to-b from-accent-blue/40 via-accent-purple/30 to-transparent hidden md:block" />
+          {/* Vertical timeline */}
+          <div className="absolute left-[27px] top-0 bottom-0 w-px bg-gradient-to-b from-neon/30 via-white/[0.06] to-transparent hidden md:block" />
 
           <div className="space-y-16">
             {steps.map((s, i) => (
@@ -85,26 +84,18 @@ export function HowItWorks() {
               >
                 {/* Step indicator */}
                 <div className="relative flex-shrink-0">
-                  <div className="w-[54px] h-[54px] rounded-2xl border border-white/[0.08] bg-white/[0.03] flex items-center justify-center text-text-secondary backdrop-blur-sm">
+                  <div className="w-[54px] h-[54px] rounded-xl border border-white/[0.06] bg-bg-primary flex items-center justify-center text-text-muted">
                     {s.icon}
                   </div>
-                  {/* Glow dot on timeline */}
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-[0.5px] w-[3px] h-[3px] rounded-full bg-accent-blue hidden md:block" />
+                  <div className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-[0.5px] w-[3px] h-[3px] rounded-full bg-neon hidden md:block" />
                 </div>
 
-                {/* Content */}
                 <div className="pt-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="text-[11px] font-mono text-accent-blue/70 tracking-wider">
-                      {s.num}
-                    </span>
-                    <h3 className="text-[18px] font-semibold text-text-primary tracking-[-0.01em]">
-                      {s.title}
-                    </h3>
+                    <span className="text-[11px] font-mono text-neon/60 tracking-wider">{s.num}</span>
+                    <h3 className="text-[18px] font-semibold text-text-primary tracking-[-0.01em]">{s.title}</h3>
                   </div>
-                  <p className="text-[14px] text-text-secondary leading-[1.7] max-w-md [text-wrap:pretty]">
-                    {s.desc}
-                  </p>
+                  <p className="text-[14px] text-text-secondary leading-[1.7] max-w-md [text-wrap:pretty]">{s.desc}</p>
                 </div>
               </motion.div>
             ))}

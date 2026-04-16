@@ -4,11 +4,8 @@ import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { useRef } from 'react'
 import { ChatAnimation } from './ChatAnimation'
 
-/* ── Spring profiles ── */
-const smoothSpring = { type: 'spring' as const, stiffness: 100, damping: 20, mass: 1 }
 const snappySpring = { type: 'spring' as const, stiffness: 400, damping: 15, mass: 1 }
 
-/* ── Stagger orchestration ── */
 const container = {
   hidden: { opacity: 0 },
   show: {
@@ -46,16 +43,11 @@ function MagneticButton({
   function handleMouseMove(event: React.MouseEvent) {
     const rect = ref.current?.getBoundingClientRect()
     if (!rect) return
-    const offsetX = event.clientX - (rect.left + rect.width / 2)
-    const offsetY = event.clientY - (rect.top + rect.height / 2)
-    rawX.set(offsetX * 0.18)
-    rawY.set(offsetY * 0.18)
+    rawX.set((event.clientX - (rect.left + rect.width / 2)) * 0.18)
+    rawY.set((event.clientY - (rect.top + rect.height / 2)) * 0.18)
   }
 
-  function reset() {
-    rawX.set(0)
-    rawY.set(0)
-  }
+  function reset() { rawX.set(0); rawY.set(0) }
 
   const isPrimary = variant === 'primary'
 
@@ -72,35 +64,19 @@ function MagneticButton({
       style={{ x, y }}
       className={`
         relative inline-flex items-center justify-center gap-2
-        rounded-full px-8 py-4 text-sm font-medium tracking-wide
-        transition-colors cursor-pointer
-        ${
-          isPrimary
-            ? 'bg-white text-[#0a0a0f] shadow-[0_0_60px_rgba(255,255,255,0.12),0_0_120px_rgba(139,92,246,0.08)]'
-            : 'border border-white/[0.12] text-text-secondary hover:text-text-primary hover:border-white/[0.24] backdrop-blur-sm'
+        rounded-full px-8 py-4 text-sm font-medium tracking-wide cursor-pointer
+        transition-colors duration-300
+        ${isPrimary
+          ? 'bg-neon text-bg-primary shadow-[0_0_50px_rgba(200,255,0,0.12)]'
+          : 'border border-white/[0.1] text-text-secondary hover:text-text-primary hover:border-white/[0.2]'
         }
       `}
     >
-      {isPrimary && (
-        <span className="absolute inset-0 rounded-full bg-gradient-to-r from-accent-blue/20 via-accent-purple/20 to-accent-cyan/20 opacity-0 transition-opacity duration-500 hover:opacity-100" />
-      )}
       <span className="relative z-10">{children}</span>
       {isPrimary && (
         <span className="relative z-10">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            className="transition-transform duration-300 group-hover:translate-x-0.5"
-          >
-            <path
-              d="M3.333 8h9.334M8.667 4l4 4-4 4"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3.333 8h9.334M8.667 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
       )}
@@ -108,72 +84,39 @@ function MagneticButton({
   )
 }
 
-/* ── Floating ambient orbs ── */
+/* ── Ambient glow — monochrome with neon hint ── */
 function AmbientOrbs() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      {/* Primary blue orb — top left */}
+      {/* Neon orb — top center, very subtle */}
       <motion.div
-        className="absolute -top-[20%] -left-[10%] w-[600px] h-[600px] rounded-full"
+        className="absolute -top-[25%] left-[20%] w-[600px] h-[600px] rounded-full"
         style={{
-          background:
-            'radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.04) 50%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(200,255,0,0.06) 0%, rgba(200,255,0,0.01) 50%, transparent 70%)',
         }}
-        animate={{
-          x: [0, 40, -20, 0],
-          y: [0, -30, 20, 0],
-        }}
+        animate={{ x: [0, 30, -15, 0], y: [0, -25, 15, 0] }}
         transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
       />
-
-      {/* Purple orb — center right */}
+      {/* White orb — right, cold neutral */}
       <motion.div
-        className="absolute top-[10%] -right-[5%] w-[500px] h-[500px] rounded-full"
+        className="absolute top-[15%] -right-[10%] w-[500px] h-[500px] rounded-full"
         style={{
-          background:
-            'radial-gradient(circle, rgba(139,92,246,0.12) 0%, rgba(139,92,246,0.03) 50%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 60%)',
         }}
-        animate={{
-          x: [0, -30, 15, 0],
-          y: [0, 40, -20, 0],
-        }}
+        animate={{ x: [0, -20, 10, 0], y: [0, 30, -15, 0] }}
         transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
-      />
-
-      {/* Cyan accent — bottom center */}
-      <motion.div
-        className="absolute -bottom-[15%] left-[30%] w-[400px] h-[400px] rounded-full"
-        style={{
-          background:
-            'radial-gradient(circle, rgba(6,182,212,0.1) 0%, rgba(6,182,212,0.02) 50%, transparent 70%)',
-        }}
-        animate={{
-          x: [0, 25, -35, 0],
-          y: [0, -20, 30, 0],
-        }}
-        transition={{ duration: 22, repeat: Infinity, ease: 'linear' }}
-      />
-
-      {/* Subtle mesh overlay */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 60% at 50% 40%, rgba(139,92,246,0.06), transparent)',
-        }}
       />
     </div>
   )
 }
 
-/* ── Hero section ── */
 export function Hero() {
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden grain isolate">
       <AmbientOrbs />
 
-      {/* Subtle top gradient line */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-purple/40 to-transparent" />
+      {/* Top neon line */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon/20 to-transparent" />
 
       <motion.div
         variants={container}
@@ -183,21 +126,19 @@ export function Hero() {
       >
         {/* Micro label */}
         <motion.div variants={fadeUp} className="mb-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.25em] text-text-secondary backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent-blue animate-pulse" />
-            AI-Powered Personal Assistant
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.25em] text-text-secondary">
+            <span className="h-1.5 w-1.5 rounded-full bg-neon animate-pulse" />
+            25 Tools &middot; 5 Modules &middot; One MCP Server
           </span>
         </motion.div>
 
-        {/* Headline */}
+        {/* Headline — monochrome with neon accent word */}
         <motion.h1
           variants={fadeUp}
           className="font-sans text-[clamp(2.75rem,7.5vw,6.5rem)] font-bold leading-[0.92] tracking-[-0.04em] [text-wrap:balance]"
         >
           Your life,{' '}
-          <span className="gradient-text-premium">
-            orchestrated
-          </span>
+          <span className="text-neon">orchestrated</span>
           <br />
           <span className="text-text-secondary font-medium text-[0.55em] leading-[1.3] tracking-[-0.02em]">
             by intelligence
@@ -209,8 +150,8 @@ export function Hero() {
           variants={fadeUp}
           className="mt-8 max-w-xl text-[clamp(1rem,1.2vw,1.125rem)] leading-[1.7] text-text-secondary [text-wrap:pretty]"
         >
-          Habits, tasks, documents, spending, goals — unified under one
-          AI that knows your rhythm and speaks your language.
+          Track habits, manage tasks, store documents, monitor spending, hit goals —
+          all through Claude. Just talk. In Hindi, English, or whatever feels natural.
         </motion.p>
 
         {/* CTAs */}
@@ -223,20 +164,12 @@ export function Hero() {
           </MagneticButton>
         </motion.div>
 
-        {/* Chat showcase — floating below */}
-        <motion.div
-          variants={fadeUp}
-          className="relative mt-20 w-full max-w-lg"
-        >
-          {/* Glow behind chat card */}
-          <div className="absolute -inset-12 bg-accent-purple/[0.06] rounded-full blur-[80px] pointer-events-none" />
-          <div className="absolute -inset-8 bg-accent-blue/[0.04] rounded-full blur-[60px] pointer-events-none" />
-
+        {/* Chat showcase */}
+        <motion.div variants={fadeUp} className="relative mt-20 w-full max-w-lg">
+          <div className="absolute -inset-12 bg-neon/[0.03] rounded-full blur-[80px] pointer-events-none" />
           <div className="relative">
             <ChatAnimation />
           </div>
-
-          {/* Fade-out bottom edge */}
           <div className="absolute -bottom-8 left-0 right-0 h-24 bg-gradient-to-t from-bg-primary to-transparent pointer-events-none" />
         </motion.div>
       </motion.div>

@@ -86,7 +86,7 @@ export default function DashboardOverview() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-neon border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -94,7 +94,7 @@ export default function DashboardOverview() {
   return (
     <div className="max-w-5xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">Welcome back</h1>
+        <h1 className="text-[22px] font-bold text-text-primary tracking-[-0.02em]">Welcome back</h1>
         <p className="text-text-secondary text-sm mt-1">{today}</p>
       </div>
 
@@ -108,13 +108,15 @@ export default function DashboardOverview() {
 
       {/* Recent activity */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
+        <h2 className="text-[11px] font-semibold text-neon uppercase tracking-[0.15em] mb-4">Recent Activity</h2>
         {recent.length === 0 ? (
-          <p className="text-text-muted text-sm">No recent activity yet. Start tracking!</p>
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-12 text-center">
+            <p className="text-text-muted text-sm">No recent activity yet. Start tracking!</p>
+          </div>
         ) : (
           <div className="space-y-2">
             {recent.map((item, i) => (
-              <div key={i} className="glass rounded-xl px-4 py-3 flex items-center justify-between">
+              <div key={i} className="rounded-xl border border-white/[0.04] bg-white/[0.01] px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span>{item.icon}</span>
                   <span className="text-sm text-text-primary">{item.text}</span>

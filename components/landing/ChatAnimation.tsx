@@ -22,7 +22,7 @@ function TypingDots() {
       {[0, 1, 2].map((i) => (
         <motion.div
           key={i}
-          className="w-1.5 h-1.5 rounded-full bg-accent-blue"
+          className="w-1.5 h-1.5 rounded-full bg-neon"
           animate={{ opacity: [0.3, 1, 0.3] }}
           transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.2 }}
         />
@@ -52,11 +52,11 @@ export function ChatAnimation() {
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <div className="glass rounded-2xl p-5 space-y-4">
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm p-5 space-y-4">
         {/* Header */}
-        <div className="flex items-center gap-2 pb-3 border-b border-white/10">
-          <div className="w-2.5 h-2.5 rounded-full bg-accent-blue" />
-          <span className="text-xs text-text-secondary font-medium">Claude + PA MCP</span>
+        <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
+          <div className="w-2 h-2 rounded-full bg-neon" />
+          <span className="text-[11px] text-text-muted font-medium uppercase tracking-[0.15em]">Claude + PA MCP</span>
         </div>
 
         {/* User message */}
@@ -67,14 +67,14 @@ export function ChatAnimation() {
               animate={{ opacity: 1, y: 0 }}
               className="flex justify-end"
             >
-              <div className="bg-accent-blue/20 border border-accent-blue/30 rounded-2xl rounded-br-md px-4 py-2.5 max-w-[80%]">
+              <div className="rounded-2xl rounded-br-sm border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 max-w-[80%]">
                 <p className="text-sm text-text-primary">{userMessage}</p>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Typing indicator */}
+        {/* Typing */}
         <AnimatePresence>
           {phase === 'typing' && (
             <motion.div
@@ -83,14 +83,14 @@ export function ChatAnimation() {
               exit={{ opacity: 0 }}
               className="flex justify-start"
             >
-              <div className="glass rounded-2xl rounded-bl-md px-4 py-3">
+              <div className="rounded-2xl rounded-bl-sm border border-white/[0.06] bg-white/[0.02] px-4 py-3">
                 <TypingDots />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Claude response */}
+        {/* Response */}
         <AnimatePresence>
           {phase === 'response' && (
             <motion.div
@@ -98,7 +98,7 @@ export function ChatAnimation() {
               animate={{ opacity: 1, y: 0 }}
               className="flex justify-start"
             >
-              <div className="glass rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%] glow-purple/30">
+              <div className="rounded-2xl rounded-bl-sm border border-neon/[0.08] bg-neon/[0.02] px-4 py-3 max-w-[90%]">
                 <div className="space-y-0.5">
                   {claudeLines.slice(0, visibleLines).map((line, i) => (
                     <motion.p

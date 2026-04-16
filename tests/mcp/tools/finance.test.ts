@@ -1,0 +1,355 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createFKJoinMock } from '../../setup'
+
+type TransactionRow = {
+  id: string
+  amount: number
+  merchant: string | null
+  source_app: string | null
+  note: string | null
+  category_id: string | null
+  transaction_date: string
+  spending_categories: { name: string; icon: string } | Array<{ name: string; icon: string }> | null
+}
+
+const mocks = vi.hoisted(() => {
+  const state: {
+    categoryLookup: { id: string } | null
+    transactionRows: TransactionRow[]
+    summaryRows: Array<{
+      category_name: string
+      category_icon: string
+      total_amount: number
+      transaction_count: number
+    }>
+  } = {
+    categoryLookup: { id: 'cat-food' },
+    transactionRows: [],
+    summaryRows: [],
+  }
+
+  return {
+    state,
+    mockClient: {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        ilike: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn(async () => ({ data: state.categoryLookup, error: null })),
+      })),
+    },
+    createTransaction: vi.fn(async (input: {
+      userId: string
+      amount: number
+      merchant?: string
+      sourceApp?: string
+      categoryId?: string
+      note?: string
+      transactionDate?: string
+      isAutoDetected?: boolean
+    }) => ({
+      id: 'tx-created',
+      amount: input.amount,
+      merchant: input.merchant ?? null,
+      source_app: input.sourceApp ?? null,
+      category_id: input.categoryId ?? null,
+      transaction_date: input.transactionDate ?? '2025-01-15T06:30:00.000Z',
+      is_auto_detected: input.isAutoDetected ?? false,
+      created_at: '2025-01-15T06:30:00.000Z',
+    })),
+    listTransactions: vi.fn(async (input: {
+      categoryId?: string
+      startDate?: string
+      endDate?: string
+      uncategorizedOnly?: boolean
+      limit?: number
+      offset?: number
+    }) => {
+      let rows = [...state.transactionRows]
+      if (input.categoryId) rows = rows.filter((row) => row.category_id === input.categoryId)
+      if (input.uncategorizedOnly) rows = rows.filter((row) => row.category_id === null)
+      if (input.startDate) rows = rows.filter((row) => row.transaction_date >= input.startDate!)
+      if (input.endDate) rows = rows.filter((row) => row.transaction_date <= input.endDate!)
+
+      const offset = input.offset ?? 0
+      const limit = input.limit ?? 50
+      return {
+        transactions: rows.slice(offset, offset + limit),
+        total: rows.length,
+      }
+    }),
+    getSpendingSummary: vi.fn(async () => ({
+      total_spent: state.summaryRows.reduce((sum, row) => sum + Number(row.total_amount), 0),
+      breakdown: state.summaryRows,
+    })),
+    ensurePresetCategories: vi.fn(),
+    registeredTools: {} as Record<string, { handler: Function }>,
+  }
+})
+
+vi.mock('@/lib/supabase/service-role', () => ({
+  createServiceRoleClient: vi.fn(() => mocks.mockClient),
+}))
+
+vi.mock('@/lib/finance/transactions', () => ({
+  createTransaction: mocks.createTransaction,
+  listTransactions: mocks.listTransactions,
+  getSpendingSummary: mocks.getSpendingSummary,
+}))
+
+vi.mock('@/lib/finance/categories', () => ({
+  ensurePresetCategories: mocks.ensurePresetCategories,
+}))
+
+vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
+  McpServer: class {
+    tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+      mocks.registeredTools[name] = { handler }
+    }
+  },
+}))
+
+import { registerFinanceTools } from '@/lib/mcp/tools/finance'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+
+const server = new McpServer({ name: 'test', version: '0.0.0' })
+registerFinanceTools(server)
+
+const authInfo = { extra: { userId: 'user-1' } }
+const noAuth = { extra: {} }
+
+function tx(overrides: Partial<TransactionRow> = {}): TransactionRow {
+  return {
+    id: 'tx-1',
+    amount: 200,
+    merchant: 'Chai Point',
+    source_app: 'manual',
+    note: null,
+    category_id: 'cat-food',
+    transaction_date: '2025-01-15T06:30:00.000Z',
+    spending_categories: { name: 'Food', icon: '🍕' },
+    ...overrides,
+  }
+}
+
+function parseToolResult(result: { content: Array<{ text: string }> }) {
+  return JSON.parse(result.content[0].text)
+}
+
+describe('get_spending_summary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.state.summaryRows = [
+      { category_name: 'Food', category_icon: '🍕', total_amount: 3000, transaction_count: 10 },
+      { category_name: 'Transport', category_icon: '🚗', total_amount: 2000, transaction_count: 5 },
+    ]
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['get_spending_summary'].handler(
+      { start_date: '2025-01-01', end_date: '2025-01-31' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('computes totals and category amounts from realistic summary rows', async () => {
+    const result = await mocks.registeredTools['get_spending_summary'].handler(
+      { start_date: '2025-01-01', end_date: '2025-01-31' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.period).toEqual({ start: '2025-01-01', end: '2025-01-31' })
+    expect(parsed.total_spent).toBe(5000)
+    expect(parsed.breakdown).toEqual([
+      { category: 'Food', icon: '🍕', amount: 3000, count: 10 },
+      { category: 'Transport', icon: '🚗', amount: 2000, count: 5 },
+    ])
+    expect(Math.round((parsed.breakdown[0].amount / parsed.total_spent) * 100)).toBe(60)
+    expect(Math.round((parsed.breakdown[1].amount / parsed.total_spent) * 100)).toBe(40)
+  })
+})
+
+describe('list_transactions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.state.categoryLookup = { id: 'cat-food' }
+    mocks.state.transactionRows = [tx()]
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['list_transactions'].handler(
+      { limit: 20 },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('returns correct category name from FK join object', async () => {
+    mocks.state.transactionRows = [tx({
+      spending_categories: { name: 'Food', icon: '🍕' },
+    })]
+
+    const result = await mocks.registeredTools['list_transactions'].handler(
+      { limit: 20 },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.transactions).toHaveLength(1)
+    expect(parsed.transactions[0].transaction_id).toBe('tx-1')
+    expect(parsed.transactions[0].category).toBe('Food')
+    expect(parsed.transactions[0].icon).toBe('🍕')
+    expect(parsed.returned).toBe(1)
+  })
+
+  it('handles null category as Uncategorized', async () => {
+    mocks.state.transactionRows = [tx({
+      category_id: null,
+      spending_categories: null,
+    })]
+
+    const result = await mocks.registeredTools['list_transactions'].handler(
+      { limit: 20 },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.transactions[0].category).toBe('Uncategorized')
+    expect(parsed.transactions[0].icon).toBe('❓')
+  })
+
+  it('handles array-shaped category fallback gracefully', async () => {
+    mocks.state.transactionRows = createFKJoinMock([
+      tx({
+        spending_categories: [{ name: 'Food', icon: '🍕' }],
+      }),
+    ]) as TransactionRow[]
+
+    const result = await mocks.registeredTools['list_transactions'].handler(
+      { limit: 20 },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.transactions[0].category).toBe('Food')
+    expect(parsed.transactions[0].icon).toBe('🍕')
+  })
+
+  it('filters by merchant after data transformation', async () => {
+    mocks.state.transactionRows = [
+      tx({ id: 'tx-1', merchant: 'Chai Point', amount: 120 }),
+      tx({ id: 'tx-2', merchant: 'Metro Rail', amount: 80, category_id: 'cat-transport', spending_categories: { name: 'Transport', icon: '🚗' } }),
+    ]
+
+    const result = await mocks.registeredTools['list_transactions'].handler(
+      { limit: 20, merchant: 'chai' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.transactions).toHaveLength(1)
+    expect(parsed.transactions[0].merchant).toBe('Chai Point')
+    expect(parsed.transactions[0].amount).toBe(120)
+  })
+
+  it('resolves category filter to category id before listing', async () => {
+    const result = await mocks.registeredTools['list_transactions'].handler(
+      { limit: 20, category: 'Food' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(mocks.listTransactions).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1',
+      categoryId: 'cat-food',
+      limit: 20,
+    }))
+    expect(parsed.transactions[0].category).toBe('Food')
+  })
+})
+
+describe('add_transaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.state.categoryLookup = { id: 'cat-food' }
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['add_transaction'].handler(
+      { amount: 100 },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('maps category name correctly in response', async () => {
+    const result = await mocks.registeredTools['add_transaction'].handler(
+      { amount: 200, merchant: ' Chai Point ', category: 'Food', note: ' masala chai ', date: '2025-01-15' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.transaction_id).toBe('tx-created')
+    expect(parsed.amount).toBe(200)
+    expect(parsed.merchant).toBe('Chai Point')
+    expect(parsed.category).toBe('Food')
+    expect(parsed.message).toBe('₹200 recorded at  Chai Point ')
+    expect(mocks.createTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1',
+      amount: 200,
+      merchant: 'Chai Point',
+      categoryId: 'cat-food',
+      note: 'masala chai',
+      sourceApp: 'manual',
+      isAutoDetected: false,
+    }))
+  })
+
+  it('uses Uncategorized when no category is provided', async () => {
+    const result = await mocks.registeredTools['add_transaction'].handler(
+      { amount: 75, merchant: 'Cash' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.category).toBe('Uncategorized')
+    expect(mocks.createTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      categoryId: undefined,
+    }))
+  })
+})
+
+describe('get_uncategorized', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.state.transactionRows = [
+      tx({ id: 'tx-food', category_id: 'cat-food', spending_categories: { name: 'Food', icon: '🍕' } }),
+      tx({ id: 'tx-null-1', amount: 99, category_id: null, spending_categories: null }),
+      tx({ id: 'tx-null-2', amount: 149, merchant: 'Unknown Store', category_id: null, spending_categories: null }),
+    ]
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['get_uncategorized'].handler(
+      { limit: 10 },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('returns only null-category transactions', async () => {
+    const result = await mocks.registeredTools['get_uncategorized'].handler(
+      { limit: 10 },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(mocks.listTransactions).toHaveBeenCalledWith({
+      userId: 'user-1',
+      uncategorizedOnly: true,
+      limit: 10,
+    })
+    expect(parsed.uncategorized_count).toBe(2)
+    expect(parsed.transactions.map((row: { transaction_id: string }) => row.transaction_id)).toEqual(['tx-null-1', 'tx-null-2'])
+    expect(parsed.transactions[0].amount).toBe(99)
+    expect(parsed.message).toBe('2 transactions need categorization')
+  })
+})

@@ -30,11 +30,11 @@ export function SummaryCard({ icon, label, value, prefix, suffix, trend, trendUp
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass rounded-2xl p-5 relative"
+      className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 relative"
     >
       {trend && (
         <span className={`absolute top-4 right-4 text-xs px-2 py-0.5 rounded-full ${
-          trendUp ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+          trendUp ? 'bg-neon/[0.08] text-neon border border-neon/[0.12]' : 'bg-red-500/[0.06] text-red-400 border border-red-500/[0.1]'
         }`}>
           {trend}
         </span>

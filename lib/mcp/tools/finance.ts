@@ -96,20 +96,23 @@ export function registerFinanceTools(server: McpServer) {
         )
       }
 
-      const mapped = transactions.map((t: {
-        id: string; amount: number; merchant: string | null;
-        source_app: string | null; note: string | null;
-        transaction_date: string; spending_categories: { name: string; icon: string }[] | null
-      }) => ({
-        transaction_id: t.id,
-        amount: Number(t.amount),
-        merchant: t.merchant,
-        source: t.source_app,
-        category: t.spending_categories?.[0]?.name || 'Uncategorized',
-        icon: t.spending_categories?.[0]?.icon || '❓',
-        note: t.note,
-        date: toIST(new Date(t.transaction_date)),
-      }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapped = transactions.map((t: any) => {
+        // Supabase returns object for single FK join, but types say array
+        const cat = Array.isArray(t.spending_categories)
+          ? t.spending_categories[0]
+          : t.spending_categories
+        return {
+          transaction_id: t.id,
+          amount: Number(t.amount),
+          merchant: t.merchant,
+          source: t.source_app,
+          category: cat?.name || 'Uncategorized',
+          icon: cat?.icon || '❓',
+          note: t.note,
+          date: toIST(new Date(t.transaction_date)),
+        }
+      })
 
       return {
         content: [{

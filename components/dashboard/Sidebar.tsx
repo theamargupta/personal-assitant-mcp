@@ -33,8 +33,13 @@ export function Sidebar() {
   const nav = (
     <>
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10">
-        <Link href="/" className="text-lg font-bold gradient-text">PA MCP</Link>
+      <div className="px-6 py-5 border-b border-white/[0.04]">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="h-7 w-7 rounded-md bg-neon flex items-center justify-center">
+            <span className="text-[11px] font-bold text-bg-primary leading-none">PA</span>
+          </div>
+          <span className="text-[15px] font-semibold text-text-primary">PA MCP</span>
+        </Link>
       </div>
 
       {/* Nav items */}
@@ -46,8 +51,8 @@ export function Sidebar() {
             onClick={() => setMobileOpen(false)}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
               isActive(item.href)
-                ? 'bg-accent-blue/10 text-accent-blue border-l-2 border-accent-blue'
-                : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
+                ? 'bg-neon/[0.08] text-neon border-l-2 border-neon'
+                : 'text-text-secondary hover:bg-white/[0.03] hover:text-text-primary'
             }`}
           >
             <span className="text-base">{item.icon}</span>
@@ -57,10 +62,10 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className="px-3 py-4 border-t border-white/10">
+      <div className="px-3 py-4 border-t border-white/[0.04]">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-text-muted hover:text-red-400 hover:bg-red-500/[0.06] transition-all"
         >
           <span>🚪</span>
           <span>Sign Out</span>
@@ -72,13 +77,13 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 flex-col glass border-r border-white/10 z-40">
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-bg-primary border-r border-white/[0.04] z-40">
         {nav}
       </aside>
 
       {/* Mobile hamburger */}
       <button
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 glass rounded-lg"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg border border-white/[0.06] bg-white/[0.02]"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-primary">
@@ -94,7 +99,7 @@ export function Sidebar() {
       {mobileOpen && (
         <>
           <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileOpen(false)} />
-          <aside className="lg:hidden fixed left-0 top-0 bottom-0 w-64 flex flex-col bg-bg-primary border-r border-white/10 z-50">
+          <aside className="lg:hidden fixed left-0 top-0 bottom-0 w-64 flex flex-col bg-bg-primary border-r border-white/[0.04] z-50">
             {nav}
           </aside>
         </>
