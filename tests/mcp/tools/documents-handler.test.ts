@@ -79,6 +79,19 @@ describe('upload_document', () => {
     const parsed = JSON.parse(result.content[0].text)
     expect(parsed.document_id).toBe('d-1')
     expect(parsed.upload_url).toBe('https://test.url/upload')
+    expect(parsed.storage_path).toBe('user-1/12345-doc.pdf')
+    expect(mockChain.insert).toHaveBeenCalledWith({
+      user_id: 'user-1',
+      name: 'Test Doc',
+      description: null,
+      doc_type: 'pdf',
+      mime_type: 'application/pdf',
+      file_size: 0,
+      storage_path: 'user-1/12345-doc.pdf',
+      tags: ['bill'],
+      extracted_text: null,
+      status: 'pending',
+    })
   })
 
   it('returns error on DB failure', async () => {
@@ -145,6 +158,28 @@ describe('confirm_upload', () => {
     expect(parsed.document_id).toBe('d-1')
     expect(parsed.status).toBe('ready')
     expect(parsed.chunks_created).toBe(2)
+    expect(updateChain.update).toHaveBeenCalledWith({
+      extracted_text: 'Hello world',
+      status: 'ready',
+    })
+    expect(insertChain.insert).toHaveBeenCalledWith([
+      {
+        document_id: 'd-1',
+        user_id: 'user-1',
+        chunk_index: 0,
+        content: 'chunk 1',
+        token_count: 10,
+        embedding: JSON.stringify([0.1, 0.2]),
+      },
+      {
+        document_id: 'd-1',
+        user_id: 'user-1',
+        chunk_index: 1,
+        content: 'chunk 2',
+        token_count: 10,
+        embedding: JSON.stringify([0.3, 0.4]),
+      },
+    ])
   })
 })
 

@@ -5,6 +5,12 @@ import { todayISTDate, toIST } from '@/types'
 
 // ── streak helpers ───────────────────────────────────────
 
+function addDaysToDateString(dateStr: string, days: number): string {
+  const date = new Date(`${dateStr}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().split('T')[0]
+}
+
 async function calculateCurrentStreak(habitId: string): Promise<number> {
   const supabase = createServiceRoleClient()
   const { data: logs } = await supabase
@@ -16,27 +22,19 @@ async function calculateCurrentStreak(habitId: string): Promise<number> {
   if (!logs || logs.length === 0) return 0
 
   const today = todayISTDate()
+  const loggedDates = new Set(logs.map(log => log.logged_date))
+  let cursor = today
   let streak = 0
 
-  for (const log of logs) {
-    const expected = new Date(today)
-    expected.setDate(expected.getDate() - streak)
-    const expectedStr = expected.toISOString().split('T')[0]
+  if (!loggedDates.has(cursor)) {
+    const yesterday = addDaysToDateString(today, -1)
+    if (!loggedDates.has(yesterday)) return 0
+    cursor = yesterday
+  }
 
-    if (log.logged_date === expectedStr) {
-      streak++
-    } else if (streak === 0) {
-      // Allow yesterday as start if today not logged yet
-      const yesterday = new Date(today)
-      yesterday.setDate(yesterday.getDate() - 1)
-      if (log.logged_date === yesterday.toISOString().split('T')[0]) {
-        streak++
-      } else {
-        break
-      }
-    } else {
-      break
-    }
+  while (loggedDates.has(cursor)) {
+    streak++
+    cursor = addDaysToDateString(cursor, -1)
   }
 
   return streak
@@ -73,9 +71,7 @@ async function calculateBestStreak(habitId: string): Promise<number> {
 
 async function completionPercentage(habitId: string, days: number): Promise<number> {
   const supabase = createServiceRoleClient()
-  const since = new Date()
-  since.setDate(since.getDate() - days)
-  const sinceStr = since.toISOString().split('T')[0]
+  const sinceStr = addDaysToDateString(todayISTDate(), -(days - 1))
 
   const { count } = await supabase
     .from('habit_logs')
@@ -273,10 +269,7 @@ export function registerHabitTools(server: McpServer) {
 
       // Use IST today to avoid UTC boundary issues
       const todayStr = todayISTDate()
-      const today = new Date(todayStr + 'T00:00:00+05:30')
-      const since = new Date(today)
-      since.setDate(since.getDate() - (days - 1)) // -29 for 30-day range that includes today
-      const sinceStr = since.toISOString().split('T')[0]
+      const sinceStr = addDaysToDateString(todayStr, -(days - 1)) // -29 for 30-day range that includes today
 
       const { data: logs } = await supabase
         .from('habit_logs')
@@ -292,9 +285,7 @@ export function registerHabitTools(server: McpServer) {
       // Build day-by-day breakdown (since → today inclusive)
       const dayByDay: { date: string; completed: boolean }[] = []
       for (let i = 0; i < days; i++) {
-        const d = new Date(since)
-        d.setDate(d.getDate() + i)
-        const dateStr = d.toISOString().split('T')[0]
+        const dateStr = addDaysToDateString(sinceStr, i)
         dayByDay.push({ date: dateStr, completed: loggedDates.has(dateStr) })
       }
 
