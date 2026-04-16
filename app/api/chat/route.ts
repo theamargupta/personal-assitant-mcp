@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { authenticateRequest, isAuthError } from '@/lib/finance/auth'
 import { CHAT_TOOLS, executeTool } from '@/lib/chat/tools'
 import { SYSTEM_PROMPT } from '@/lib/chat/system-prompt'
+import { runOpenAIChatLoop } from '@/lib/chat/openai-stream'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -15,36 +17,38 @@ interface InboundMessage {
   content: string
 }
 
+type ChatProvider = 'claude' | 'openai'
+
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request)
   if (isAuthError(auth)) return auth
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json(
-      { error: 'Chat not configured: ANTHROPIC_API_KEY missing on server.' },
-      { status: 500 }
-    )
-  }
-
-  let body: { messages?: InboundMessage[] }
+  let body: { messages?: InboundMessage[]; provider?: ChatProvider }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
+  const provider: ChatProvider = body.provider === 'openai' ? 'openai' : 'claude'
+
+  if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+    return NextResponse.json(
+      { error: 'Chat not configured: OPENAI_API_KEY missing on server.' },
+      { status: 500 }
+    )
+  }
+  if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json(
+      { error: 'Chat not configured: ANTHROPIC_API_KEY missing on server.' },
+      { status: 500 }
+    )
+  }
+
   const inbound = body.messages || []
   if (!inbound.length || inbound.every((m) => m.role !== 'user')) {
     return NextResponse.json({ error: 'At least one user message required' }, { status: 400 })
   }
-
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-  // Build initial conversation — user/assistant text turns only.
-  const conversation: Anthropic.MessageParam[] = inbound.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }))
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -55,6 +59,21 @@ export async function POST(request: NextRequest) {
       }
 
       try {
+        if (provider === 'openai') {
+          const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+          await runOpenAIChatLoop(openai, inbound, auth.userId, send)
+          controller.close()
+          return
+        }
+
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+        // Build initial conversation — user/assistant text turns only.
+        const conversation: Anthropic.MessageParam[] = inbound.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
+
         for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
           // Stream one Claude response; collect tool uses and text.
           const result = await anthropic.messages.stream({

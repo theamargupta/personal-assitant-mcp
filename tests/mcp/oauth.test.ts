@@ -40,7 +40,7 @@ describe('buildProtectedResourceMetadata', () => {
     const meta = buildProtectedResourceMetadata(ORIGIN)
     expect(meta.resource).toBe('https://sathi.devfrend.com/api/mcp')
     expect(meta.authorization_servers).toEqual([ORIGIN])
-    expect(meta.scopes_supported).toEqual(['mcp:tools'])
+    expect(meta.scopes_supported).toEqual(['mcp:tools', 'mcp:openai'])
     expect(meta.bearer_methods_supported).toEqual(['header'])
     expect(meta.resource_name).toBe('Sathi — Personal Assistant')
   })
@@ -54,7 +54,7 @@ describe('buildOAuthMetadata', () => {
     expect(meta.token_endpoint).toBe(`${ORIGIN}/oauth/token`)
     expect(meta.registration_endpoint).toBe(`${ORIGIN}/oauth/register`)
     expect(meta.revocation_endpoint).toBe(`${ORIGIN}/oauth/revoke`)
-    expect(meta.scopes_supported).toEqual(['mcp:tools'])
+    expect(meta.scopes_supported).toEqual(['mcp:tools', 'mcp:openai'])
     expect(meta.response_types_supported).toEqual(['code'])
     expect(meta.grant_types_supported).toEqual(['authorization_code', 'refresh_token'])
     expect(meta.code_challenge_methods_supported).toEqual(['S256'])
@@ -148,6 +148,14 @@ describe('validateAuthorizeRequest', () => {
     })).toThrow('Unsupported scope')
   })
 
+  it('accepts mcp:openai scope', () => {
+    const result = validateAuthorizeRequest({
+      ...baseInput,
+      scope: 'mcp:openai',
+    })
+    expect(result.scopes).toEqual(['mcp:openai'])
+  })
+
   it('accepts null scope (defaults to mcp:tools)', () => {
     const result = validateAuthorizeRequest({
       ...baseInput,
@@ -166,6 +174,11 @@ describe('validateTokenRequestScopeAndResource', () => {
   it('validates provided scope', () => {
     const result = validateTokenRequestScopeAndResource({ scope: 'mcp:tools', origin: ORIGIN })
     expect(result.scopes).toEqual(['mcp:tools'])
+  })
+
+  it('validates mcp:openai scope on token request', () => {
+    const result = validateTokenRequestScopeAndResource({ scope: 'mcp:openai', origin: ORIGIN })
+    expect(result.scopes).toEqual(['mcp:openai'])
   })
 
   it('throws for unsupported scope', () => {
