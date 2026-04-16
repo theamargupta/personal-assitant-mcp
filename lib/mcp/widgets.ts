@@ -23,7 +23,9 @@ function getBundle(): string {
         return `${exported ?? local}:${local}`
       }).join(',') + '};',
     )
-  } catch {
+    console.log(`[widget] ext-apps bundle loaded: ${extAppsBundle.length} bytes`)
+  } catch (err) {
+    console.error('[widget] ext-apps bundle load failed, using stub:', err)
     extAppsBundle = 'globalThis.ExtApps={App:class{async connect(){}}};'
   }
 
