@@ -89,10 +89,14 @@ const widgetToolUris: Record<string, string> = {
   get_uncategorized: 'ui://widgets/transaction-categorizer.html',
   get_review: 'ui://widgets/review-dashboard.html',
   get_document: 'ui://widgets/document-viewer.html',
+  save_memory: 'ui://widgets/memory-search.html',
+  search_memory: 'ui://widgets/memory-search.html',
+  get_context: 'ui://widgets/memory-context.html',
+  consolidate_memories: 'ui://widgets/memory-consolidator.html',
 }
 
 describe('MCP app widget registration', () => {
-  it('registers five widget resources as MCP app HTML', async () => {
+  it('registers widget resources as MCP app HTML', async () => {
     const server = createMcpServer() as unknown as {
       resources: Array<{
         name: string
@@ -108,6 +112,9 @@ describe('MCP app widget registration', () => {
       'ui://widgets/review-dashboard.html',
       'ui://widgets/transaction-categorizer.html',
       'ui://widgets/document-viewer.html',
+      'ui://widgets/memory-search.html',
+      'ui://widgets/memory-consolidator.html',
+      'ui://widgets/memory-context.html',
     ])
 
     const heatmap = server.resources[0]
@@ -117,10 +124,15 @@ describe('MCP app widget registration', () => {
     expect(readResult.contents[0].uri).toBe('ui://widgets/habit-heatmap.html')
     expect(readResult.contents[0].mimeType).toBe('text/html;profile=mcp-app')
     expect(readResult.contents[0].text).toContain('HabitHeatmap')
+
+    const memorySearch = server.resources.find(r => r.uri === 'ui://widgets/memory-search.html')
+    expect(memorySearch).toBeDefined()
+    const memHtml = await memorySearch!.handler()
+    expect(memHtml.contents[0].text).toContain('MemorySearch')
     expect(readResult.contents[0].text).not.toContain('__EXT_APPS_BUNDLE__')
   })
 
-  it('adds UI resource metadata only to the five widget-backed tools', () => {
+  it('adds UI resource metadata only to widget-backed tools', () => {
     const server = createMcpServer() as unknown as {
       tools: Array<{ name: string; meta?: Record<string, unknown> & { ui?: { resourceUri?: string } } }>
     }

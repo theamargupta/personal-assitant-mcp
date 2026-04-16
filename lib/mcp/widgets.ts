@@ -48,6 +48,9 @@ const WIDGETS: WidgetDef[] = [
   { name: 'Review Dashboard', filename: 'review-dashboard.html', uri: 'ui://widgets/review-dashboard.html' },
   { name: 'Transaction Categorizer', filename: 'transaction-categorizer.html', uri: 'ui://widgets/transaction-categorizer.html' },
   { name: 'Document Viewer', filename: 'document-viewer.html', uri: 'ui://widgets/document-viewer.html' },
+  { name: 'Memory Search', filename: 'memory-search.html', uri: 'ui://widgets/memory-search.html' },
+  { name: 'Memory Consolidator', filename: 'memory-consolidator.html', uri: 'ui://widgets/memory-consolidator.html' },
+  { name: 'Memory Context', filename: 'memory-context.html', uri: 'ui://widgets/memory-context.html' },
 ]
 
 export function registerWidgetResources(server: McpServer) {
@@ -79,4 +82,7 @@ export const WIDGET_URIS = {
   reviewDashboard: 'ui://widgets/review-dashboard.html',
   transactionCategorizer: 'ui://widgets/transaction-categorizer.html',
   documentViewer: 'ui://widgets/document-viewer.html',
+  memorySearch: 'ui://widgets/memory-search.html',
+  memoryConsolidator: 'ui://widgets/memory-consolidator.html',
+  memoryContext: 'ui://widgets/memory-context.html',
 } as const

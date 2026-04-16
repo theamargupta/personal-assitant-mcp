@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import { z } from 'zod'
 import { toIST } from '@/types'
 import {
@@ -10,10 +11,12 @@ import {
   deleteMemory,
   getContext,
   getRules,
+  consolidateMemories,
 } from '@/lib/memory/items'
 import { createSpace, listSpaces } from '@/lib/memory/spaces'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { MemoryCategoryEnum } from '@/lib/memory/types'
+import { WIDGET_URIS } from '@/lib/mcp/widgets'
 
 function logAccess(userId: string, action: string, toolName: string, query?: string, memoryIds?: string[]) {
   const supabase = createServiceRoleClient()
@@ -36,23 +39,28 @@ export function registerMemoryTools(server: McpServer) {
 
   // ── save_memory ──────────────────────────────────────────
 
-  server.tool(
+  registerAppTool(
+    server,
     'save_memory',
-    'Store a new memory with content, category, tags, and optional project scope.',
     {
-      space: z.string().min(1).default('personal').describe('Space slug (default: "personal")'),
-      title: z.string().min(1).max(255).describe('Memory title'),
-      content: z.string().min(1).max(10000).describe('Memory content — the knowledge to store'),
-      category: MemoryCategoryEnum.default('note').describe('Category (default: note)'),
-      tags: z.array(z.string()).default([]).describe('Tags for organizing'),
-      project: z.string().optional().describe('Optional project scope'),
+      description: 'Store a new memory with content, category, tags, and optional project scope. Checks for duplicates (≥90% similarity) — pass force=true to skip.',
+      inputSchema: {
+        space: z.string().min(1).default('personal').describe('Space slug (default: "personal")'),
+        title: z.string().min(1).max(255).describe('Memory title'),
+        content: z.string().min(1).max(10000).describe('Memory content — the knowledge to store'),
+        category: MemoryCategoryEnum.default('note').describe('Category (default: note)'),
+        tags: z.array(z.string()).default([]).describe('Tags for organizing'),
+        project: z.string().optional().describe('Optional project scope'),
+        force: z.boolean().default(false).describe('Skip duplicate check and save directly'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.memorySearch } },
     },
-    async ({ space, title, content, category, tags, project }, { authInfo }) => {
+    async ({ space, title, content, category, tags, project, force }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
       if (!userId) throw new Error('Unauthorized')
 
       try {
-        const memory = await saveMemory({
+        const result = await saveMemory({
           userId,
           spaceSlug: space,
           title,
@@ -60,20 +68,38 @@ export function registerMemoryTools(server: McpServer) {
           category,
           tags,
           project,
+          force,
         })
 
-        logAccess(userId, 'save', 'save_memory', title, [memory.id])
+        if (result.status === 'duplicates_found') {
+          logAccess(userId, 'save_duplicates_found', 'save_memory', title, result.similar_memories.map(m => m.id))
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                status: 'duplicates_found',
+                pending_memory: result.pending_memory,
+                similar_memories: result.similar_memories,
+                suggestion: result.suggestion,
+              }),
+            }],
+          }
+        }
+
+        logAccess(userId, 'save', 'save_memory', title, [result.memory.id])
 
         return {
           content: [{
             type: 'text' as const,
             text: JSON.stringify({
-              memory_id: memory.id,
-              title: memory.title,
-              category: memory.category,
+              status: 'saved',
+              memory_id: result.memory.id,
+              title: result.memory.title,
+              category: result.memory.category,
               space,
-              project: memory.project,
-              created_at: toIST(new Date(memory.created_at)),
+              project: result.memory.project,
+              created_at: toIST(new Date(result.memory.created_at)),
             }),
           }],
         }
@@ -86,15 +112,19 @@ export function registerMemoryTools(server: McpServer) {
 
   // ── search_memory ────────────────────────────────────────
 
-  server.tool(
+  registerAppTool(
+    server,
     'search_memory',
-    'Semantic search across all memories using natural language query. Uses AI-powered vector similarity.',
     {
-      query: z.string().min(1).max(500).describe('Natural language search query'),
-      space: z.string().optional().describe('Filter by space slug'),
-      category: MemoryCategoryEnum.optional().describe('Optional category filter'),
-      project: z.string().optional().describe('Optional project filter'),
-      limit: z.number().int().min(1).max(20).default(5).describe('Max results (default: 5)'),
+      description: 'Semantic + keyword hybrid search across all memories. Returns results with score breakdown and stale hints.',
+      inputSchema: {
+        query: z.string().min(1).max(500).describe('Natural language search query'),
+        space: z.string().optional().describe('Filter by space slug'),
+        category: MemoryCategoryEnum.optional().describe('Optional category filter'),
+        project: z.string().optional().describe('Optional project filter'),
+        limit: z.number().int().min(1).max(20).default(5).describe('Max results (default: 5)'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.memorySearch } },
     },
     async ({ query, space, category, project, limit }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
@@ -116,6 +146,7 @@ export function registerMemoryTools(server: McpServer) {
           content: [{
             type: 'text' as const,
             text: JSON.stringify({
+              query,
               results: results.map((r) => ({
                 id: r.id,
                 title: r.title,
@@ -124,7 +155,10 @@ export function registerMemoryTools(server: McpServer) {
                 tags: r.tags,
                 project: r.project,
                 space: r.space_slug,
-                similarity: Math.round(r.similarity * 1000) / 1000,
+                semantic_score: Math.round(r.semantic_score * 1000) / 1000,
+                keyword_score: Math.round(r.keyword_score * 1000) / 1000,
+                final_score: Math.round(r.final_score * 1000) / 1000,
+                stale_hint: r.stale_hint,
               })),
               count: results.length,
             }),
@@ -179,6 +213,7 @@ export function registerMemoryTools(server: McpServer) {
                 tags: m.tags,
                 project: m.project,
                 updated_at: toIST(new Date(m.updated_at)),
+                stale_hint: m.stale_hint,
               })),
               count: memories.length,
             }),
@@ -312,11 +347,15 @@ export function registerMemoryTools(server: McpServer) {
 
   // ── get_context ──────────────────────────────────────────
 
-  server.tool(
+  registerAppTool(
+    server,
     'get_context',
-    'Fetch all memories for a specific project — instant project onboarding.',
     {
-      project: z.string().min(1).describe('Project name to get context for'),
+      description: 'Fetch all memories for a specific project — instant project onboarding.',
+      inputSchema: {
+        project: z.string().min(1).describe('Project name to get context for'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.memoryContext } },
     },
     async ({ project }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
@@ -336,6 +375,7 @@ export function registerMemoryTools(server: McpServer) {
               content: m.content,
               category: m.category,
               tags: m.tags,
+              importance: m.importance,
             })),
             count: memories.length,
           }),
@@ -373,6 +413,45 @@ export function registerMemoryTools(server: McpServer) {
             count: rules.length,
           }),
         }],
+      }
+    }
+  )
+
+  // ── consolidate_memories ─────────────────────────────────
+
+  registerAppTool(
+    server,
+    'consolidate_memories',
+    {
+      description: 'Find duplicate and stale memories for cleanup. Returns groups for you to review — no auto-deletion.',
+      inputSchema: {
+        space: z.string().optional().describe('Limit to a specific space (by slug)'),
+        mode: z.enum(['duplicates', 'stale', 'both']).default('both').describe('What to look for: duplicates, stale, or both'),
+      },
+      _meta: { ui: { resourceUri: WIDGET_URIS.memoryConsolidator } },
+    },
+    async ({ space, mode }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const result = await consolidateMemories({
+          userId,
+          spaceSlug: space,
+          mode,
+        })
+
+        logAccess(userId, 'consolidate', 'consolidate_memories', mode)
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          }],
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true }
       }
     }
   )

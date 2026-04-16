@@ -1,0 +1,124 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 13px system-ui, sans-serif; background: transparent; color: #fafafa; }
+  .container { padding: 16px; }
+  .header { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .subheader { font-size: 11px; color: #525252; margin-bottom: 16px; }
+  .pending-banner { background: rgba(200,255,0,0.06); border: 1px solid rgba(200,255,0,0.15); border-radius: 10px; padding: 12px; margin-bottom: 16px; }
+  .pending-title { font-size: 12px; font-weight: 600; color: #c8ff00; margin-bottom: 4px; }
+  .pending-content { font-size: 11px; color: #a3a3a3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .card-title { font-size: 14px; font-weight: 600; flex: 1; }
+  .badge { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 10px; background: rgba(200,255,0,0.1); color: #c8ff00; }
+  .card-content { font-size: 12px; color: #a3a3a3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }
+  .score-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .score-bar-bg { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.04); }
+  .score-bar { height: 100%; border-radius: 2px; background: #c8ff00; }
+  .score-label { font-size: 10px; color: #525252; font-family: ui-monospace, monospace; white-space: nowrap; }
+  .score-breakdown { font-size: 10px; color: #525252; font-family: ui-monospace, monospace; margin-bottom: 6px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { font-size: 10px; color: #737373; background: rgba(255,255,255,0.03); padding: 1px 6px; border-radius: 4px; }
+  .project-badge { font-size: 10px; color: #c8ff00; font-weight: 600; }
+  .stale-banner { font-size: 10px; color: #f59e0b; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.12); border-radius: 6px; padding: 4px 8px; margin-top: 6px; }
+  .empty { text-align: center; color: #525252; padding: 40px 0; font-size: 12px; }
+
+  @media (prefers-color-scheme: light) {
+    body { color: #1a1a1a; }
+    .badge { background: rgba(101,163,0,0.1); color: #65a300; }
+    .pending-banner { background: rgba(101,163,0,0.06); border-color: rgba(101,163,0,0.15); }
+    .pending-title { color: #65a300; }
+    .card { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.06); }
+    .card-content, .score-label, .score-breakdown, .subheader { color: #888; }
+    .score-bar-bg { background: rgba(0,0,0,0.04); }
+    .score-bar { background: #65a300; }
+    .tag { background: rgba(0,0,0,0.03); color: #888; }
+    .project-badge { color: #65a300; }
+  }
+</style>
+<div class="container">
+  <div class="header" id="title"></div>
+  <div class="subheader" id="subtitle"></div>
+  <div id="pending"></div>
+  <div id="results"></div>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+(async () => {
+  const app = new App({ name: "MemorySearch", version: "1.0.0" }, {});
+
+  app.ontoolresult = ({ content }) => {
+    const d = JSON.parse(content[0].text);
+
+    if (d.status === "saved") {
+      document.getElementById("title").textContent = "Memory Saved";
+      document.getElementById("subtitle").textContent = d.title ? esc(d.title) : "";
+      document.getElementById("pending").innerHTML = "";
+      document.getElementById("results").innerHTML = '<div class="empty">Saved to your vault</div>';
+      return;
+    }
+
+    if (d.status === "duplicates_found") {
+      document.getElementById("title").textContent = "Similar Memories Found";
+      document.getElementById("subtitle").textContent = d.suggestion;
+
+      const pendingEl = document.getElementById("pending");
+      const pm = d.pending_memory;
+      pendingEl.innerHTML = `<div class="pending-banner">
+        <div class="pending-title">Your memory (not yet saved)</div>
+        <div class="pending-content"><strong>${esc(pm.title)}</strong> — ${esc(pm.content)}</div>
+      </div>`;
+
+      renderCards(d.similar_memories, true);
+      return;
+    }
+
+    document.getElementById("title").textContent = "Memory Search";
+    document.getElementById("subtitle").textContent = d.count + " result" + (d.count !== 1 ? "s" : "") + (d.query ? ' for "' + esc(d.query) + '"' : "");
+    document.getElementById("pending").innerHTML = "";
+    renderCards(d.results, false);
+  };
+
+  function renderCards(items, isDuplicateView) {
+    const el = document.getElementById("results");
+    if (!items || items.length === 0) {
+      el.innerHTML = '<div class="empty">No memories found</div>';
+      return;
+    }
+    el.innerHTML = items.map(m => {
+      const scoreHtml = isDuplicateView
+        ? `<div class="score-breakdown">similarity: ${(m.similarity * 100).toFixed(0)}%</div>`
+        : `<div class="score-row">
+            <div class="score-bar-bg"><div class="score-bar" style="width:${Math.min((m.final_score || 0) * 100, 100).toFixed(0)}%"></div></div>
+            <span class="score-label">${((m.final_score || 0) * 100).toFixed(0)}%</span>
+          </div>
+          <div class="score-breakdown">semantic: ${m.semantic_score?.toFixed(3) ?? "-"} | keyword: ${m.keyword_score?.toFixed(3) ?? "-"}</div>`;
+
+      const tagsHtml = (m.tags || []).map(t => `<span class="tag">#${esc(t)}</span>`).join("");
+      const projectHtml = m.project ? `<span class="project-badge">${esc(m.project)}</span>` : "";
+      const staleHtml = m.stale_hint ? `<div class="stale-banner">${esc(m.stale_hint)}</div>` : "";
+
+      return `<div class="card">
+        <div class="card-header">
+          <span class="card-title">${esc(m.title)}</span>
+          <span class="badge">${esc(m.category)}</span>
+        </div>
+        <div class="card-content">${esc(m.content)}</div>
+        ${scoreHtml}
+        <div class="tags">${projectHtml}${tagsHtml}</div>
+        ${staleHtml}
+      </div>`;
+    }).join("");
+  }
+
+  function esc(s) {
+    if (!s) return "";
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  await app.connect();
+})();
+</script>

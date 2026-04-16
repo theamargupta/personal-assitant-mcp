@@ -124,10 +124,11 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('get_rules')
     expect(toolNames).toContain('create_space')
     expect(toolNames).toContain('list_spaces')
+    expect(toolNames).toContain('consolidate_memories')
   })
 
-  it('registers exactly 38 tools total', () => {
+  it('registers exactly 39 tools total', () => {
     const server = createMcpServer() as unknown as { tools: Array<{ name: string }> }
-    expect(server.tools).toHaveLength(38)
+    expect(server.tools).toHaveLength(39)
   })
 })

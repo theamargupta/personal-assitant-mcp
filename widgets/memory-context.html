@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 13px system-ui, sans-serif; background: transparent; color: #fafafa; }
+  .container { padding: 16px; }
+  .header { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .subheader { font-size: 11px; color: #525252; margin-bottom: 16px; }
+  .section { margin-bottom: 16px; }
+  .section-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .section-icon { font-size: 12px; }
+  .section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; color: #c8ff00; }
+  .section-count { font-size: 10px; color: #525252; }
+  .card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .card-content { font-size: 11px; color: #a3a3a3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 6px; }
+  .importance-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .importance-bar-bg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.04); max-width: 80px; }
+  .importance-bar { height: 100%; border-radius: 2px; background: #c8ff00; }
+  .importance-label { font-size: 9px; color: #525252; font-family: ui-monospace, monospace; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { font-size: 9px; color: #737373; background: rgba(255,255,255,0.03); padding: 1px 6px; border-radius: 4px; }
+  .empty { text-align: center; color: #525252; padding: 40px 0; font-size: 12px; }
+
+  @media (prefers-color-scheme: light) {
+    body { color: #1a1a1a; }
+    .section-title { color: #65a300; }
+    .card { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.06); }
+    .card-content, .subheader, .importance-label, .section-count { color: #888; }
+    .importance-bar-bg { background: rgba(0,0,0,0.04); }
+    .importance-bar { background: #65a300; }
+    .tag { background: rgba(0,0,0,0.03); color: #888; }
+  }
+</style>
+<div class="container">
+  <div class="header" id="title"></div>
+  <div class="subheader" id="subtitle"></div>
+  <div id="sections"></div>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+(async () => {
+  const app = new App({ name: "MemoryContext", version: "1.0.0" }, {});
+
+  const CATEGORY_META = {
+    rule: { icon: "📏", label: "Rules" },
+    context: { icon: "🔍", label: "Context" },
+    decision: { icon: "⚖️", label: "Decisions" },
+    preference: { icon: "⭐", label: "Preferences" },
+    snippet: { icon: "📝", label: "Snippets" },
+    note: { icon: "💡", label: "Notes" },
+    project: { icon: "📁", label: "Project" },
+    persona: { icon: "👤", label: "Persona" },
+  };
+
+  const CATEGORY_ORDER = ["rule", "context", "decision", "preference", "snippet", "note", "project", "persona"];
+
+  app.ontoolresult = ({ content }) => {
+    const d = JSON.parse(content[0].text);
+    document.getElementById("title").textContent = d.project + " Context";
+    document.getElementById("subtitle").textContent = d.count + " memor" + (d.count !== 1 ? "ies" : "y");
+
+    if (!d.memories || d.memories.length === 0) {
+      document.getElementById("sections").innerHTML = '<div class="empty">No memories for this project</div>';
+      return;
+    }
+
+    const groups = {};
+    for (const m of d.memories) {
+      (groups[m.category] ||= []).push(m);
+    }
+
+    const sectionsEl = document.getElementById("sections");
+    sectionsEl.innerHTML = "";
+    for (const cat of CATEGORY_ORDER) {
+      const items = groups[cat];
+      if (!items) continue;
+      const meta = CATEGORY_META[cat] || { icon: "📌", label: cat };
+
+      sectionsEl.innerHTML += `<div class="section">
+        <div class="section-header">
+          <span class="section-icon">${meta.icon}</span>
+          <span class="section-title">${meta.label}</span>
+          <span class="section-count">${items.length}</span>
+        </div>
+        ${items.map(m => {
+          const impPct = Math.min((m.importance || 0) / 10 * 100, 100);
+          const tagsHtml = (m.tags || []).map(t => '<span class="tag">#' + esc(t) + '</span>').join("");
+          return `<div class="card">
+            <div class="card-title">${esc(m.title)}</div>
+            <div class="card-content">${esc(m.content)}</div>
+            <div class="importance-row">
+              <div class="importance-bar-bg"><div class="importance-bar" style="width:${impPct}%"></div></div>
+              <span class="importance-label">${(m.importance || 0).toFixed(1)}</span>
+            </div>
+            ${tagsHtml ? '<div class="tags">' + tagsHtml + '</div>' : ''}
+          </div>`;
+        }).join("")}
+      </div>`;
+    }
+  };
+
+  function esc(s) {
+    if (!s) return "";
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  await app.connect();
+})();
+</script>

@@ -23,6 +23,7 @@ export const SaveMemorySchema = z.object({
   category: MemoryCategoryEnum.default('note').describe('Category (default: note)'),
   tags: z.array(z.string()).default([]).describe('Tags for organizing'),
   project: z.string().optional().describe('Optional project scope (e.g., "memory-mcp", "apmt-pricing")'),
+  force: z.boolean().default(false).describe('Skip duplicate check and save directly'),
 })
 
 export const SearchMemorySchema = z.object({
@@ -73,6 +74,11 @@ export const CreateSpaceSchema = z.object({
   slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).describe('URL-safe slug (lowercase, hyphens only)'),
   description: z.string().max(500).optional().describe('Space description'),
   icon: z.string().max(10).default('🧠').describe('Emoji icon'),
+})
+
+export const ConsolidateMemoriesSchema = z.object({
+  space: z.string().optional().describe('Limit to a specific space (by slug)'),
+  mode: z.enum(['duplicates', 'stale', 'both']).default('both').describe('What to look for: duplicates, stale, or both'),
 })
 
 // ── Database row types ─────────────────────────────────────

@@ -3,6 +3,36 @@ import { generateEmbedding } from '@/lib/documents/embed'
 import { ensureDefaultSpaces, resolveSpaceId } from './spaces'
 import type { MemoryItem, MemoryCategory } from './types'
 
+function embeddingStringForRpc(embedding: unknown): string {
+  if (embedding == null) return JSON.stringify([])
+  if (typeof embedding === 'string') return embedding
+  return JSON.stringify(embedding)
+}
+
+export type SaveMemoryResult =
+  | { status: 'saved'; memory: MemoryItem }
+  | {
+      status: 'duplicates_found'
+      pending_memory: {
+        title: string
+        content: string
+        category: string
+        tags: string[]
+        project: string | null
+        space: string
+      }
+      similar_memories: Array<{
+        id: string
+        title: string
+        content: string
+        category: string
+        similarity: number
+        updated_at: string
+        space_slug: string
+      }>
+      suggestion: string
+    }
+
 export async function saveMemory(params: {
   userId: string
   spaceSlug: string
@@ -11,8 +41,9 @@ export async function saveMemory(params: {
   category: MemoryCategory
   tags: string[]
   project?: string
-}): Promise<MemoryItem> {
-  const { userId, spaceSlug, title, content, category, tags, project } = params
+  force?: boolean
+}): Promise<SaveMemoryResult> {
+  const { userId, spaceSlug, title, content, category, tags, project, force = false } = params
 
   await ensureDefaultSpaces(userId)
 
@@ -21,6 +52,52 @@ export async function saveMemory(params: {
 
   const embeddingText = `${title}\n\n${content}`
   const embedding = await generateEmbedding(embeddingText)
+
+  if (!force) {
+    const supabase = createServiceRoleClient()
+    const { data: matches, error: matchError } = await supabase.rpc('pa_match_memories', {
+      query_embedding: JSON.stringify(embedding),
+      filter_user_id: userId,
+      filter_space_slug: null,
+      filter_category: null,
+      filter_project: null,
+      match_count: 5,
+      match_threshold: 0.9,
+    })
+
+    if (!matchError && matches && (matches as unknown[]).length > 0) {
+      const rows = matches as Array<{
+        id: string
+        title: string
+        content: string
+        category: string
+        similarity: number
+        updated_at: string
+        space_slug: string
+      }>
+      return {
+        status: 'duplicates_found',
+        pending_memory: {
+          title,
+          content,
+          category,
+          tags,
+          project: project?.trim() || null,
+          space: spaceSlug,
+        },
+        similar_memories: rows.map((m) => ({
+          id: m.id,
+          title: m.title,
+          content: m.content,
+          category: m.category,
+          similarity: Math.round(m.similarity * 1000) / 1000,
+          updated_at: m.updated_at,
+          space_slug: m.space_slug,
+        })),
+        suggestion: `Found ${rows.length} similar memor${rows.length === 1 ? 'y' : 'ies'} (≥90% match). Review before saving. Use force=true to save anyway.`,
+      }
+    }
+  }
 
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase
@@ -40,7 +117,15 @@ export async function saveMemory(params: {
     .single()
 
   if (error) throw new Error(`Failed to save memory: ${error.message}`)
-  return data as MemoryItem
+  return { status: 'saved', memory: data as MemoryItem }
+}
+
+export type HybridSearchResult = MemoryItem & {
+  space_slug: string
+  semantic_score: number
+  keyword_score: number
+  final_score: number
+  stale_hint: string | null
 }
 
 export async function searchMemories(params: {
@@ -50,7 +135,7 @@ export async function searchMemories(params: {
   category?: string
   project?: string
   limit: number
-}): Promise<Array<MemoryItem & { similarity: number; space_slug: string }>> {
+}): Promise<HybridSearchResult[]> {
   const { userId, query, spaceSlug, category, project, limit } = params
 
   await ensureDefaultSpaces(userId)
@@ -58,19 +143,26 @@ export async function searchMemories(params: {
   const queryEmbedding = await generateEmbedding(query)
 
   const supabase = createServiceRoleClient()
-  const { data, error } = await supabase.rpc('pa_match_memories', {
+  const { data, error } = await supabase.rpc('pa_hybrid_search', {
     query_embedding: JSON.stringify(queryEmbedding),
+    query_text: query,
     filter_user_id: userId,
     filter_space_slug: spaceSlug || null,
     filter_category: category || null,
     filter_project: project || null,
     match_count: limit,
-    match_threshold: 0.3,
   })
 
   if (error) throw new Error(`Search failed: ${error.message}`)
 
-  const rows = (data ?? []) as Array<MemoryItem & { similarity: number; space_slug: string }>
+  const rows = (data ?? []) as Array<
+    MemoryItem & {
+      space_slug: string
+      semantic_score: number
+      keyword_score: number
+      final_score: number
+    }
+  >
   const ids = rows.map((r) => r.id)
   if (ids.length > 0) {
     void (async () => {
@@ -82,7 +174,31 @@ export async function searchMemories(params: {
     })()
   }
 
-  return rows
+  return rows.map((r) => ({
+    ...r,
+    stale_hint: computeStaleHint(r),
+  }))
+}
+
+export function computeStaleHint(memory: {
+  valid_at: string
+  invalid_at: string | null
+  importance: number
+}): string | null {
+  if (memory.invalid_at) {
+    return 'This memory has been superseded.'
+  }
+
+  const now = new Date()
+  const validAt = new Date(memory.valid_at)
+  const daysSinceValid = Math.floor((now.getTime() - validAt.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (daysSinceValid > 90 && memory.importance < 2.0) {
+    const months = Math.floor(daysSinceValid / 30)
+    return `This memory is ${months} month${months > 1 ? 's' : ''} old with low access (importance: ${memory.importance.toFixed(1)}). May be outdated.`
+  }
+
+  return null
 }
 
 export async function listMemories(params: {
@@ -93,7 +209,7 @@ export async function listMemories(params: {
   tag?: string
   limit: number
   offset: number
-}): Promise<MemoryItem[]> {
+}): Promise<Array<MemoryItem & { stale_hint: string | null }>> {
   const { userId, spaceSlug, category, project, tag, limit, offset } = params
 
   await ensureDefaultSpaces(userId)
@@ -122,7 +238,10 @@ export async function listMemories(params: {
   }
 
   const { data } = await query
-  return (data ?? []) as MemoryItem[]
+  return ((data ?? []) as MemoryItem[]).map((m) => ({
+    ...m,
+    stale_hint: computeStaleHint(m),
+  }))
 }
 
 export async function getMemory(
@@ -252,4 +371,182 @@ export async function getRules(
 
   const { data } = await query
   return (data ?? []) as MemoryItem[]
+}
+
+export interface ConsolidateResult {
+  duplicate_groups: Array<{
+    memories: Array<{
+      id: string
+      title: string
+      content: string
+      category: string
+      importance: number
+      created_at: string
+    }>
+    max_similarity: number
+  }>
+  stale_memories: Array<{
+    id: string
+    title: string
+    valid_at: string
+    importance: number
+    category: string
+    reason: string
+  }>
+  total_groups: number
+  total_stale: number
+}
+
+export async function consolidateMemories(params: {
+  userId: string
+  spaceSlug?: string
+  mode: 'duplicates' | 'stale' | 'both'
+}): Promise<ConsolidateResult> {
+  const { userId, spaceSlug, mode } = params
+  const supabase = createServiceRoleClient()
+
+  const result: ConsolidateResult = {
+    duplicate_groups: [],
+    stale_memories: [],
+    total_groups: 0,
+    total_stale: 0,
+  }
+
+  if (mode === 'duplicates' || mode === 'both') {
+    const baseSelect =
+      'id, title, content, category, importance, created_at, valid_at, invalid_at, embedding'
+
+    const { data: allMemories } = spaceSlug
+      ? await supabase
+          .from('pa_memory_items')
+          .select(
+            `${baseSelect}, pa_memory_spaces!inner(slug)`,
+          )
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .is('invalid_at', null)
+          .eq('pa_memory_spaces.slug', spaceSlug)
+          .order('created_at', { ascending: true })
+      : await supabase
+          .from('pa_memory_items')
+          .select(baseSelect)
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .is('invalid_at', null)
+          .order('created_at', { ascending: true })
+    const memories = (allMemories ?? []) as Array<{
+      id: string
+      title: string
+      content: string
+      category: string
+      importance: number
+      created_at: string
+      embedding: unknown
+    }>
+
+    const byId = new Map(memories.map((m) => [m.id, m]))
+    const seen = new Set<string>()
+
+    for (const mem of memories) {
+      if (seen.has(mem.id)) continue
+      if (mem.embedding == null) continue
+
+      const { data: matches } = await supabase.rpc('pa_match_memories', {
+        query_embedding: embeddingStringForRpc(mem.embedding),
+        filter_user_id: userId,
+        filter_space_slug: spaceSlug || null,
+        filter_category: null,
+        filter_project: null,
+        match_count: 10,
+        match_threshold: 0.9,
+      })
+
+      const matchRows = (matches ?? []) as Array<{
+        id: string
+        similarity: number
+        title: string
+        content: string
+        category: string
+        importance: number
+      }>
+
+      const others = matchRows.filter((m) => m.id !== mem.id && !seen.has(m.id))
+      if (others.length === 0) continue
+
+      const maxSimilarity = Math.max(...others.map((o) => o.similarity))
+      const groupMemories = [
+        {
+          id: mem.id,
+          title: mem.title,
+          content: mem.content,
+          category: mem.category,
+          importance: mem.importance,
+          created_at: mem.created_at,
+        },
+        ...others.map((o) => {
+          const full = byId.get(o.id)
+          return {
+            id: o.id,
+            title: full?.title ?? o.title,
+            content: full?.content ?? o.content,
+            category: full?.category ?? o.category,
+            importance: full?.importance ?? o.importance,
+            created_at: full?.created_at ?? '',
+          }
+        }),
+      ]
+
+      result.duplicate_groups.push({
+        memories: groupMemories,
+        max_similarity: Math.round(maxSimilarity * 1000) / 1000,
+      })
+
+      seen.add(mem.id)
+      for (const o of others) seen.add(o.id)
+    }
+
+    result.total_groups = result.duplicate_groups.length
+  }
+
+  if (mode === 'stale' || mode === 'both') {
+    const staleSelect = 'id, title, valid_at, invalid_at, importance, category'
+
+    const { data: candidates } = spaceSlug
+      ? await supabase
+          .from('pa_memory_items')
+          .select(`${staleSelect}, pa_memory_spaces!inner(slug)`)
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .eq('pa_memory_spaces.slug', spaceSlug)
+          .order('valid_at', { ascending: true })
+      : await supabase
+          .from('pa_memory_items')
+          .select(staleSelect)
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .order('valid_at', { ascending: true })
+    for (const mem of (candidates ?? []) as Array<{
+      id: string
+      title: string
+      valid_at: string
+      invalid_at: string | null
+      importance: number
+      category: string
+    }>) {
+      const hint = computeStaleHint(mem)
+      if (hint) {
+        result.stale_memories.push({
+          id: mem.id,
+          title: mem.title,
+          valid_at: mem.valid_at,
+          importance: mem.importance,
+          category: mem.category,
+          reason: hint,
+        })
+      }
+    }
+    result.total_stale = result.stale_memories.length
+  }
+
+  return result
 }

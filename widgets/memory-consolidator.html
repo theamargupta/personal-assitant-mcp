@@ -1,0 +1,120 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 13px system-ui, sans-serif; background: transparent; color: #fafafa; }
+  .container { padding: 16px; }
+  .header { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .subheader { font-size: 11px; color: #525252; margin-bottom: 16px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); color: #737373; cursor: default; }
+  .tab.active { background: rgba(200,255,0,0.1); color: #c8ff00; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; color: #c8ff00; margin-bottom: 10px; }
+  .group { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .similarity-badge { font-size: 10px; font-weight: 700; color: #f59e0b; background: rgba(245,158,11,0.1); padding: 2px 8px; border-radius: 8px; margin-bottom: 8px; display: inline-block; }
+  .mem-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .mem-row:last-child { border-bottom: none; }
+  .mem-title { font-size: 12px; font-weight: 600; }
+  .mem-content { font-size: 11px; color: #a3a3a3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; }
+  .mem-importance { font-size: 11px; font-family: ui-monospace, monospace; color: #c8ff00; white-space: nowrap; }
+  .stale-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .stale-info { flex: 1; }
+  .stale-title { font-size: 12px; font-weight: 600; }
+  .stale-reason { font-size: 10px; color: #f59e0b; margin-top: 2px; }
+  .stale-meta { font-size: 10px; color: #525252; font-family: ui-monospace, monospace; text-align: right; }
+  .footer { font-size: 11px; color: #525252; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 10px; margin-top: 10px; }
+  .empty { text-align: center; color: #525252; padding: 30px 0; font-size: 12px; }
+
+  @media (prefers-color-scheme: light) {
+    body { color: #1a1a1a; }
+    .tab.active { background: rgba(101,163,0,0.1); color: #65a300; }
+    .section-title { color: #65a300; }
+    .group, .stale-card { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.06); }
+    .mem-content, .subheader, .stale-meta { color: #888; }
+    .mem-importance { color: #65a300; }
+    .mem-row { border-color: rgba(0,0,0,0.04); }
+    .footer { border-color: rgba(0,0,0,0.06); }
+  }
+</style>
+<div class="container">
+  <div class="header">Memory Consolidator</div>
+  <div class="subheader" id="subtitle"></div>
+  <div class="tabs" id="tabs"></div>
+  <div id="duplicates" class="section"></div>
+  <div id="stale" class="section"></div>
+  <div class="footer" id="footer"></div>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+(async () => {
+  const app = new App({ name: "MemoryConsolidator", version: "1.0.0" }, {});
+
+  app.ontoolresult = ({ content }) => {
+    const d = JSON.parse(content[0].text);
+
+    const hasDupes = d.duplicate_groups && d.duplicate_groups.length > 0;
+    const hasStale = d.stale_memories && d.stale_memories.length > 0;
+
+    document.getElementById("subtitle").textContent =
+      (d.total_groups || 0) + " duplicate group" + (d.total_groups !== 1 ? "s" : "") + ", " +
+      (d.total_stale || 0) + " stale memor" + (d.total_stale !== 1 ? "ies" : "y");
+
+    const tabsEl = document.getElementById("tabs");
+    tabsEl.innerHTML = "";
+    if (hasDupes) tabsEl.innerHTML += '<span class="tab active">Duplicates</span>';
+    if (hasStale) tabsEl.innerHTML += '<span class="tab active">Stale</span>';
+    if (!hasDupes && !hasStale) tabsEl.innerHTML = '<span class="tab">Nothing to clean up</span>';
+
+    const dupesEl = document.getElementById("duplicates");
+    dupesEl.innerHTML = "";
+    if (hasDupes) {
+      dupesEl.innerHTML = '<div class="section-title">Duplicate Groups</div>' +
+        d.duplicate_groups.map(g => {
+          const rows = g.memories.map(m =>
+            `<div class="mem-row">
+              <div>
+                <div class="mem-title">${esc(m.title)}</div>
+                <div class="mem-content">${esc(m.content)}</div>
+              </div>
+              <div class="mem-importance">${m.importance.toFixed(1)}</div>
+            </div>`
+          ).join("");
+          return `<div class="group">
+            <span class="similarity-badge">${(g.max_similarity * 100).toFixed(0)}% similar</span>
+            ${rows}
+          </div>`;
+        }).join("");
+    }
+
+    const staleEl = document.getElementById("stale");
+    staleEl.innerHTML = "";
+    if (hasStale) {
+      staleEl.innerHTML = '<div class="section-title">Stale Memories</div>' +
+        d.stale_memories.map(m =>
+          `<div class="stale-card">
+            <div class="stale-info">
+              <div class="stale-title">${esc(m.title)}</div>
+              <div class="stale-reason">${esc(m.reason)}</div>
+            </div>
+            <div class="stale-meta">${m.importance.toFixed(1)}</div>
+          </div>`
+        ).join("");
+    }
+
+    if (!hasDupes && !hasStale) {
+      document.getElementById("footer").textContent = "Your memory vault is clean!";
+    } else {
+      document.getElementById("footer").textContent = "Review the items above and tell me which to merge or delete.";
+    }
+  };
+
+  function esc(s) {
+    if (!s) return "";
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  await app.connect();
+})();
+</script>
