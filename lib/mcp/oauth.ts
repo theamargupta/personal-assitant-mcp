@@ -16,7 +16,7 @@ const ACCESS_TOKEN_TTL_SECONDS = 60 * 60
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30
 const AUTHORIZATION_CODE_TTL_SECONDS = 60 * 10
 /** `mcp:openai` is for ChatGPT / OpenAI connector flows; same access as `mcp:tools`. */
-const SUPPORTED_SCOPES = ['mcp:tools', 'mcp:openai'] as const
+const SUPPORTED_SCOPES: string[] = ['mcp:tools', 'mcp:openai']
 const SUPPORTED_REDIRECT_HOSTS = new Set([
   'claude.ai',
   'claude.com',
