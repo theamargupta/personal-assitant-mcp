@@ -8,9 +8,13 @@
   .doc-icon { width: 40px; height: 40px; border-radius: 8px; background: rgba(255,255,255,0.04); display: flex; align-items: center; justify-content: center; font-size: 20px; }
   .doc-title { font-size: 15px; font-weight: 600; }
   .doc-meta { font-size: 11px; color: #525252; }
-  .preview { width: 100%; max-height: 400px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; margin-bottom: 12px; }
+  .preview { width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; margin-bottom: 12px; }
   .preview img { width: 100%; display: block; }
-  .preview iframe { width: 100%; height: 400px; border: none; }
+  .preview-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; background: rgba(255,255,255,0.02); }
+  .preview-card svg { opacity: 0.4; }
+  .preview-card .label { font-size: 12px; color: #737373; }
+  .preview-card .open-btn { padding: 6px 14px; border-radius: 6px; background: rgba(255,255,255,0.06); color: #fafafa; font-size: 11px; font-weight: 500; cursor: pointer; border: none; }
+  .preview-card .open-btn:hover { background: rgba(255,255,255,0.1); }
   .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
   .tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.04); color: #737373; }
   .download-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; background: #c8ff00; color: #050505; font-size: 12px; font-weight: 600; cursor: pointer; border: none; }
@@ -20,6 +24,9 @@
     body { color: #1a1a1a; }
     .doc-icon { background: rgba(0,0,0,0.04); }
     .preview { border-color: rgba(0,0,0,0.08); }
+    .preview-card { background: rgba(0,0,0,0.02); }
+    .preview-card .open-btn { background: rgba(0,0,0,0.06); color: #1a1a1a; }
+    .preview-card .open-btn:hover { background: rgba(0,0,0,0.1); }
     .tag { background: rgba(0,0,0,0.04); color: #888; }
     .download-btn { background: #65a300; color: #fff; }
     .doc-meta, .info-row { color: #888; }
@@ -49,6 +56,7 @@ const { App } = globalThis.ExtApps;
   const icons = { pdf: "📄", image: "🖼️", other: "📁" };
 
   function formatSize(bytes) {
+    if (!bytes || bytes === 0) return "—";
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
@@ -72,7 +80,18 @@ const { App } = globalThis.ExtApps;
     if (d.mime_type && d.mime_type.startsWith("image/")) {
       previewEl.innerHTML = '<img src="' + d.download_url + '" alt="' + d.name + '" />';
     } else if (d.mime_type === "application/pdf") {
-      previewEl.innerHTML = '<iframe src="' + d.download_url + '"></iframe>';
+      previewEl.innerHTML =
+        '<div class="preview-card">' +
+          '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+            '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>' +
+            '<path d="M14 2v6h6"/><path d="M10 13h4"/><path d="M10 17h4"/><path d="M10 9h1"/>' +
+          '</svg>' +
+          '<span class="label">PDF Document</span>' +
+          '<button class="open-btn" id="open-pdf">Open in browser ↗</button>' +
+        '</div>';
+      document.getElementById("open-pdf").addEventListener("click", () => {
+        app.openLink({ url: d.download_url });
+      });
     } else {
       previewEl.style.display = "none";
     }

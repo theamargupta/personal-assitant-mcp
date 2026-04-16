@@ -112,11 +112,22 @@ export function registerDocumentTools(server: McpServer) {
 
       const trimmedText = extracted_text.trim()
 
-      // 2. Update document record with text
+      // 2. Get actual file size from storage
+      let fileSize = 0
+      try {
+        const folder = doc.storage_path.split('/').slice(0, -1).join('/')
+        const fileName = doc.storage_path.split('/').pop()!
+        const { data: files } = await supabase.storage.from('documents').list(folder)
+        const file = files?.find(f => f.name === fileName)
+        if (file?.metadata?.size) fileSize = file.metadata.size
+      } catch { /* best-effort */ }
+
+      // 3. Update document record with text and file size
       const { error: updateErr } = await supabase
         .from('wallet_documents')
         .update({
           extracted_text: trimmedText,
+          file_size: fileSize,
           status: 'ready',
         })
         .eq('id', document_id)
