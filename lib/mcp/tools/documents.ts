@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { toIST } from '@/types'
-import { uploadFile, getSignedUrl, deleteFile } from '@/lib/documents/storage'
+import { buildStoragePath, createSignedUploadUrl, getSignedUrl, downloadFile, deleteFile } from '@/lib/documents/storage'
 import { extractText } from '@/lib/documents/extract'
 import { chunkText } from '@/lib/documents/chunk'
 import { generateEmbeddings, generateEmbedding } from '@/lib/documents/embed'
@@ -16,13 +16,15 @@ function detectDocType(mimeType: string): 'pdf' | 'image' | 'other' {
 export function registerDocumentTools(server: McpServer) {
 
   // ── upload_document ─────────────────────────────────────
+  // Step 1: Creates a pending document record and returns a signed upload URL.
+  // The client (Claude) uploads the file directly to Supabase Storage using this URL,
+  // then calls confirm_upload to trigger text extraction and embedding.
   server.tool(
     'upload_document',
-    'Upload a document (PDF or image). Extracts text, generates embeddings for search and Q&A.',
+    'Get a signed upload URL for a document. Returns a URL to upload the file directly to storage. After uploading, call confirm_upload to process the document.',
     {
       name: z.string().min(1).max(255).describe('Document name, e.g. "Electricity Bill March 2026"'),
       description: z.string().max(1000).optional().describe('Optional description'),
-      file_base64: z.string().describe('Base64-encoded file content'),
       mime_type: z.enum([
         'application/pdf',
         'image/png',
@@ -31,23 +33,15 @@ export function registerDocumentTools(server: McpServer) {
       ]).describe('MIME type of the file'),
       tags: z.array(z.string()).default([]).describe('Tags for organizing, e.g. ["bill", "electricity"]'),
     },
-    async ({ name, description, file_base64, mime_type, tags }, { authInfo }) => {
+    async ({ name, description, mime_type, tags }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
       if (!userId) throw new Error('Unauthorized')
 
-      const fileBuffer = Buffer.from(file_base64, 'base64')
-      const fileSize = fileBuffer.length
-
-      // 1. Upload to Supabase Storage
-      const storagePath = await uploadFile(userId, name.replace(/\s+/g, '-'), fileBuffer, mime_type)
-
-      // 2. Extract text
-      const extractedText = await extractText(fileBuffer, mime_type)
-
-      // 3. Save document record
       const supabase = createServiceRoleClient()
       const docType = detectDocType(mime_type)
+      const storagePath = buildStoragePath(userId, name.replace(/\s+/g, '-'))
 
+      // 1. Create pending document record
       const { data: doc, error: docErr } = await supabase
         .from('wallet_documents')
         .insert({
@@ -56,17 +50,90 @@ export function registerDocumentTools(server: McpServer) {
           description: description?.trim() || null,
           doc_type: docType,
           mime_type,
-          file_size: fileSize,
+          file_size: 0,
           storage_path: storagePath,
           tags,
-          extracted_text: extractedText || null,
+          extracted_text: null,
+          status: 'pending',
         })
         .select('id, name, created_at')
         .single()
 
       if (docErr) return { content: [{ type: 'text' as const, text: `Error: ${docErr.message}` }], isError: true }
 
-      // 4. Chunk and embed
+      // 2. Generate signed upload URL (valid for 5 minutes)
+      const uploadUrl = await createSignedUploadUrl(storagePath)
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            document_id: doc.id,
+            upload_url: uploadUrl,
+            upload_url_expires_in: '5 minutes',
+            storage_path: storagePath,
+            mime_type,
+            instructions: 'Upload the file to upload_url using PUT with the correct Content-Type header. Then call confirm_upload with the document_id to process the document.',
+          }),
+        }],
+      }
+    }
+  )
+
+  // ── confirm_upload ─────────────────────────────────────
+  // Step 2: After file is uploaded to storage, this downloads it,
+  // extracts text, chunks it, generates embeddings, and marks the document as ready.
+  server.tool(
+    'confirm_upload',
+    'Confirm a document upload after the file has been uploaded to the signed URL. Triggers text extraction, chunking, and embedding.',
+    {
+      document_id: z.string().uuid().describe('UUID of the document returned by upload_document'),
+    },
+    async ({ document_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+
+      // 1. Fetch the pending document
+      const { data: doc, error: fetchErr } = await supabase
+        .from('wallet_documents')
+        .select('*')
+        .eq('id', document_id)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .single()
+
+      if (fetchErr || !doc) {
+        return { content: [{ type: 'text' as const, text: 'Error: Pending document not found. Either the document_id is wrong or it was already confirmed.' }], isError: true }
+      }
+
+      // 2. Download file from storage to extract text
+      let fileBuffer: Buffer
+      try {
+        fileBuffer = await downloadFile(doc.storage_path)
+      } catch {
+        return { content: [{ type: 'text' as const, text: 'Error: File not found in storage. Make sure you uploaded the file to the signed URL before confirming.' }], isError: true }
+      }
+
+      const fileSize = fileBuffer.length
+
+      // 3. Extract text
+      const extractedText = await extractText(fileBuffer, doc.mime_type)
+
+      // 4. Update document record
+      const { error: updateErr } = await supabase
+        .from('wallet_documents')
+        .update({
+          file_size: fileSize,
+          extracted_text: extractedText || null,
+          status: 'ready',
+        })
+        .eq('id', document_id)
+
+      if (updateErr) return { content: [{ type: 'text' as const, text: `Error: ${updateErr.message}` }], isError: true }
+
+      // 5. Chunk and embed
       let chunksCreated = 0
       if (extractedText) {
         const chunks = chunkText(extractedText)
@@ -100,10 +167,11 @@ export function registerDocumentTools(server: McpServer) {
           text: JSON.stringify({
             document_id: doc.id,
             name: doc.name,
-            doc_type: docType,
+            doc_type: doc.doc_type,
             file_size_bytes: fileSize,
             text_extracted: !!extractedText,
             chunks_created: chunksCreated,
+            status: 'ready',
             created_at: toIST(new Date(doc.created_at)),
           }),
         }],
@@ -130,6 +198,7 @@ export function registerDocumentTools(server: McpServer) {
         .from('wallet_documents')
         .select('id, name, description, doc_type, mime_type, file_size, tags, created_at', { count: 'exact' })
         .eq('user_id', userId)
+        .eq('status', 'ready')
 
       if (doc_type) query = query.eq('doc_type', doc_type)
       if (tag) query = query.contains('tags', [tag])

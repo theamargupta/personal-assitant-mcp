@@ -2,24 +2,19 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 const BUCKET = 'documents'
 
-export async function uploadFile(
-  userId: string,
-  fileName: string,
-  fileBuffer: Buffer,
-  mimeType: string
-): Promise<string> {
+export function buildStoragePath(userId: string, fileName: string): string {
+  return `${userId}/${Date.now()}-${fileName}`
+}
+
+export async function createSignedUploadUrl(storagePath: string): Promise<string> {
   const supabase = createServiceRoleClient()
-  const storagePath = `${userId}/${Date.now()}-${fileName}`
 
-  const { error } = await supabase.storage
+  const { data, error } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, fileBuffer, {
-      contentType: mimeType,
-      upsert: false,
-    })
+    .createSignedUploadUrl(storagePath)
 
-  if (error) throw new Error(`Upload failed: ${error.message}`)
-  return storagePath
+  if (error) throw new Error(`Signed upload URL failed: ${error.message}`)
+  return data.signedUrl
 }
 
 export async function getSignedUrl(storagePath: string, expiresInSeconds = 3600): Promise<string> {

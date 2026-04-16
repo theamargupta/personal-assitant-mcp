@@ -59,6 +59,7 @@ supabase/
     003_document_wallet.sql         # documents, document_chunks tables
     004_finance_tracking.sql        # spending_categories, transactions tables
     005_goals.sql                   # goals, goal_milestones tables
+    006_document_status.sql         # adds status column to wallet_documents
 lib/
   goals/
     goals.ts                        # Goal CRUD + progress computation from linked data
@@ -91,12 +92,13 @@ app/api/finance/
 | `update_task_status` | Status transitions with notes |
 | `complete_task` | Mark completed with overdue detection, time-to-completion calc |
 
-### Document Wallet Tools (5)
+### Document Wallet Tools (6)
 
 | Tool | Description |
 |------|-------------|
-| `upload_document` | Upload PDF/image, extract text, chunk + embed for search |
-| `list_documents` | List documents with filters by type and tags |
+| `upload_document` | Returns a signed upload URL + creates pending document record. Client uploads file directly to Supabase Storage. |
+| `confirm_upload` | After file is uploaded to the signed URL, triggers text extraction, chunking, and embedding. Marks document as ready. |
+| `list_documents` | List documents with filters by type and tags (only shows ready documents) |
 | `get_document` | Get document details + signed download URL (1hr expiry) |
 | `search_documents` | Semantic search across all document content |
 | `delete_document` | Permanently delete document, chunks, and stored file |
@@ -129,7 +131,7 @@ app/api/finance/
 - **tasks** — title, description, status (pending/in_progress/completed), priority (low/medium/high), due_date, tags[], completed_at
 
 ### Document Wallet Tables
-- **wallet_documents** — name, description, doc_type, mime_type, file_size, storage_path, tags, extracted_text
+- **wallet_documents** — name, description, doc_type, mime_type, file_size, storage_path, tags, extracted_text, status (pending/ready)
 - **wallet_document_chunks** — document_id, chunk_index, content, token_count, embedding (vector 1536)
 
 ### Finance Tables
