@@ -2,41 +2,14 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-
-const EXT_APPS_BUNDLE_PATH = join(
-  process.cwd(),
-  'node_modules/@modelcontextprotocol/ext-apps/dist/src/app-with-deps.js',
-)
-
-let extAppsBundle: string | null = null
-
-function getBundle(): string {
-  if (extAppsBundle) return extAppsBundle
-
-  try {
-    const raw = readFileSync(EXT_APPS_BUNDLE_PATH, 'utf8')
-    extAppsBundle = raw.replace(/export\{([^}]+)\};?\s*$/, (_, body) =>
-      'globalThis.ExtApps={' +
-      body.split(',').map((part: string) => {
-        const [local, exported] = part.split(' as ').map((value: string) => value.trim())
-        return `${exported ?? local}:${local}`
-      }).join(',') + '};',
-    )
-    console.log(`[widget] ext-apps bundle loaded: ${extAppsBundle.length} bytes`)
-  } catch (err) {
-    console.error('[widget] ext-apps bundle load failed, using stub:', err)
-    extAppsBundle = 'globalThis.ExtApps={App:class{async connect(){}}};'
-  }
-
-  return extAppsBundle
-}
+import { extAppsBundle } from '@/lib/mcp/generated/ext-apps-bundle'
 
 function loadWidget(filename: string): string {
   const widgetPath = join(process.cwd(), 'widgets', filename)
   try {
     const html = readFileSync(widgetPath, 'utf8')
     console.log(`[widget] served ${filename}: ${html.length} bytes`)
-    return html.replace('/*__EXT_APPS_BUNDLE__*/', () => getBundle())
+    return html.replace('/*__EXT_APPS_BUNDLE__*/', () => extAppsBundle)
   } catch (err) {
     console.error(`[widget] failed to read ${widgetPath}:`, err)
     throw err

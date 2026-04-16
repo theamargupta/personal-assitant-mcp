@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "postinstall": "node scripts/gen-ext-apps-bundle.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
