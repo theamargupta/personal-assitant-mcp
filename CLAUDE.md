@@ -81,6 +81,7 @@ supabase/
     006_document_status.sql         # adds status column to wallet_documents
     007_memory_vaults.sql           # pa_memory_* tables + pa_match_memories (prefix: shared Supabase w/ memory-mcp)
     008_memory_hybrid_search.sql    # search_vector + GIN, pa_hybrid_search, pa_match_memories result shape update
+    009_task_categorization.sql     # tasks.task_type ('personal'|'project') + tasks.project TEXT + CHECK + composite index
 app/api/finance/
     transactions/route.ts           # POST + GET transactions
     transactions/[id]/route.ts      # PATCH + DELETE transaction
@@ -101,15 +102,16 @@ app/api/finance/
 | `get_habit_analytics` | N-day completion %, day-by-day breakdown, streaks |
 | `update_habit` | Modify properties or archive |
 
-### Task Tools (5)
+### Task Tools (6)
 
 | Tool | Description |
 |------|-------------|
-| `create_task` | Title, description, due date, priority (low/medium/high), tags |
-| `list_tasks` | Filter by status/priority/due date range; pagination |
+| `create_task` | Title, description (up to 10k chars), due date, priority, tags, `task_type` ('personal' \| 'project'), `project` (required when type='project') |
+| `list_tasks` | Filter by status/priority/due date/`task_type`/`project`; pagination |
 | `update_task_status` | Status transitions with notes |
 | `complete_task` | Mark completed with overdue detection, time-to-completion calc |
 | `delete_task` | Permanently delete a task |
+| `get_task` | Fetch task + for project-typed tasks, attach `{ summary, rules, relevant (top-10 hybrid search), claude_md_hint }` drawn from `pa_memory_items` — ready to paste into a new Claude Code session |
 
 ### Document Wallet Tools (6)
 
@@ -168,7 +170,7 @@ app/api/finance/
 ### Core Tables
 - **habits** — name, frequency, color, reminder_time, archived, user_id
 - **habit_logs** — habit_id, logged_date, notes (unique on habit_id + logged_date)
-- **tasks** — title, description, status (pending/in_progress/completed), priority (low/medium/high), due_date, tags[], completed_at
+- **tasks** — title, description (up to 10k chars), status (pending/in_progress/completed), priority (low/medium/high), due_date, tags[], completed_at, `task_type` ('personal' default / 'project'), `project` (TEXT, nullable). CHECK: project required when task_type='project'. Joins free-text to `pa_memory_items.project`. Added by migration `009`.
 
 ### Document Wallet Tables
 - **wallet_documents** — name, description, doc_type, mime_type, file_size, storage_path, tags, extracted_text, status (pending/ready)
@@ -285,3 +287,7 @@ npm run lint       # ESLint
 - Dark theme (#0a0a0f base, glassmorphism)
 - Tailwind CSS v4 + Framer Motion
 - Geist font
+
+## Using Sathi with Claude Code
+
+Tag any task as `task_type='project'` with a `project` value (e.g. `'sathi'`, `'app-devfrend-com'`) and `get_task` will return that row alongside a `project_context` bundle — `summary` (memory counts by category), `rules` (all rule-category memories for the project), `relevant` (top-10 hybrid-search hits seeded by the task title + description), and a `claude_md_hint` reminder. Paste the JSON into a fresh Claude Code session to onboard it to the task instantly.

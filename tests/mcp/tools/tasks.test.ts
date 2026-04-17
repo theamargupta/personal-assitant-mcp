@@ -147,6 +147,8 @@ describe('create_task', () => {
       priority: 'high',
       due_date: '2026-04-20',
       tags: ['shopping'],
+      task_type: 'personal',
+      project: null,
     })
     expect(parsed.task_id).toBe('t-1')
     expect(parsed.title).toBe('Buy milk')

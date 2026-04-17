@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { toIST } from '@/types'
+import { searchMemories, getRules } from '@/lib/memory/items'
 
 export function registerTaskTools(server: McpServer) {
 
@@ -11,14 +12,23 @@ export function registerTaskTools(server: McpServer) {
     'Create a one-time task with title, description, due date, and priority.',
     {
       title: z.string().min(1).max(255).describe('Task title'),
-      description: z.string().max(2000).optional().describe('Task description'),
+      description: z.string().max(10000).optional().describe('Task description (up to 10000 chars)'),
       due_date: z.string().date().optional().describe('Due date (YYYY-MM-DD)'),
       priority: z.enum(['low', 'medium', 'high']).default('medium').describe('Priority (default: medium)'),
       tags: z.array(z.string()).default([]).describe('Tags for organizing'),
+      task_type: z.enum(['personal', 'project']).default('personal').describe('Task type (default: personal). "project" tasks enable get_task context retrieval.'),
+      project: z.string().min(1).max(100).optional().describe('Project name — required when task_type="project". Joins to pa_memory_items.project.'),
     },
-    async ({ title, description, due_date, priority, tags }, { authInfo }) => {
+    async ({ title, description, due_date, priority, tags, task_type = 'personal', project }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
       if (!userId) throw new Error('Unauthorized')
+
+      if (task_type === 'project' && !project) {
+        return {
+          content: [{ type: 'text' as const, text: "Error: project is required when task_type is 'project'" }],
+          isError: true,
+        }
+      }
 
       const supabase = createServiceRoleClient()
       const { data, error } = await supabase
@@ -31,8 +41,10 @@ export function registerTaskTools(server: McpServer) {
           priority,
           due_date: due_date || null,
           tags,
+          task_type,
+          project: project ?? null,
         })
-        .select('id, title, status, priority, due_date, created_at')
+        .select('id, title, status, priority, due_date, task_type, project, created_at')
         .single()
 
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }], isError: true }
@@ -46,6 +58,8 @@ export function registerTaskTools(server: McpServer) {
             status: data.status,
             priority: data.priority,
             due_date: data.due_date,
+            task_type: data.task_type,
+            project: data.project,
             created_at: toIST(new Date(data.created_at)),
           }),
         }],
@@ -62,21 +76,25 @@ export function registerTaskTools(server: McpServer) {
       priority: z.enum(['low', 'medium', 'high']).optional().describe('Filter by priority'),
       due_date_before: z.string().date().optional().describe('Tasks due before this date'),
       due_date_after: z.string().date().optional().describe('Tasks due after this date'),
+      task_type: z.enum(['personal', 'project']).optional().describe('Filter by task type'),
+      project: z.string().optional().describe('Filter by project name'),
       limit: z.number().int().min(1).max(100).default(50).describe('Max results (default: 50)'),
       offset: z.number().int().min(0).default(0).describe('Offset for pagination'),
     },
-    async ({ status, priority, due_date_before, due_date_after, limit, offset }, { authInfo }) => {
+    async ({ status, priority, due_date_before, due_date_after, task_type, project, limit, offset }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string
       if (!userId) throw new Error('Unauthorized')
 
       const supabase = createServiceRoleClient()
       let query = supabase
         .from('tasks')
-        .select('id, title, description, status, priority, due_date, tags, created_at, completed_at', { count: 'exact' })
+        .select('id, title, description, status, priority, due_date, tags, task_type, project, created_at, completed_at', { count: 'exact' })
         .eq('user_id', userId)
 
       if (status) query = query.eq('status', status)
       if (priority) query = query.eq('priority', priority)
+      if (task_type) query = query.eq('task_type', task_type)
+      if (project) query = query.eq('project', project)
       if (due_date_after) query = query.gte('due_date', due_date_after)
       if (due_date_before) query = query.lte('due_date', due_date_before)
 
@@ -93,6 +111,8 @@ export function registerTaskTools(server: McpServer) {
         priority: task.priority,
         due_date: task.due_date,
         tags: task.tags,
+        task_type: task.task_type,
+        project: task.project,
         created_at: toIST(new Date(task.created_at)),
         completed_at: task.completed_at ? toIST(new Date(task.completed_at)) : null,
       }))
@@ -275,6 +295,105 @@ export function registerTaskTools(server: McpServer) {
             task_id,
             title: task.title,
             message: 'Task permanently deleted',
+          }),
+        }],
+      }
+    }
+  )
+
+  // ── get_task ────────────────────────────────────────────
+  server.tool(
+    'get_task',
+    'Get a task by id. For task_type="project" tasks, also returns project_context: { summary, rules (all), relevant (top-10 hybrid search), claude_md_hint } — ready to paste into a new Claude Code session. Personal tasks return project_context: null.',
+    {
+      task_id: z.string().uuid().describe('UUID of the task'),
+    },
+    async ({ task_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+      const { data: taskRow, error } = await supabase
+        .from('tasks')
+        .select('id, title, description, status, priority, due_date, tags, task_type, project, created_at, updated_at, completed_at')
+        .eq('id', task_id)
+        .eq('user_id', userId)
+        .single()
+
+      if (error || !taskRow) {
+        return { content: [{ type: 'text' as const, text: 'Error: Task not found' }], isError: true }
+      }
+
+      const task = {
+        task_id: taskRow.id,
+        title: taskRow.title,
+        description: taskRow.description,
+        status: taskRow.status,
+        priority: taskRow.priority,
+        due_date: taskRow.due_date,
+        tags: taskRow.tags,
+        task_type: taskRow.task_type,
+        project: taskRow.project,
+        created_at: toIST(new Date(taskRow.created_at)),
+        completed_at: taskRow.completed_at ? toIST(new Date(taskRow.completed_at)) : null,
+      }
+
+      if (taskRow.task_type !== 'project' || !taskRow.project) {
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ task, project_context: null }) }],
+        }
+      }
+
+      const projectName = taskRow.project as string
+
+      const { data: memoryRows } = await supabase
+        .from('pa_memory_items')
+        .select('category')
+        .eq('user_id', userId)
+        .eq('project', projectName)
+        .eq('is_active', true)
+
+      const byCategory: Record<string, number> = {}
+      for (const row of memoryRows ?? []) {
+        const cat = (row as { category: string }).category
+        byCategory[cat] = (byCategory[cat] ?? 0) + 1
+      }
+
+      const queryText = [taskRow.title, taskRow.description].filter(Boolean).join(' — ').slice(0, 500)
+
+      const [rules, relevant] = await Promise.all([
+        getRules(userId, projectName),
+        searchMemories({ userId, query: queryText, project: projectName, limit: 10 }),
+      ])
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            task,
+            project_context: {
+              summary: {
+                total_memories: memoryRows?.length ?? 0,
+                by_category: byCategory,
+              },
+              rules: rules.map(r => ({
+                id: r.id,
+                title: r.title,
+                content: r.content,
+                tags: r.tags,
+              })),
+              relevant: relevant.map(r => ({
+                id: r.id,
+                title: r.title,
+                content: r.content,
+                category: r.category,
+                tags: r.tags,
+                semantic_score: Math.round(r.semantic_score * 1000) / 1000,
+                keyword_score: Math.round(r.keyword_score * 1000) / 1000,
+                final_score: Math.round(r.final_score * 1000) / 1000,
+              })),
+              claude_md_hint: `Load the project CLAUDE.md and any nested CLAUDE.md files touching this task. See project='${projectName}' rules above for hard constraints.`,
+            },
           }),
         }],
       }

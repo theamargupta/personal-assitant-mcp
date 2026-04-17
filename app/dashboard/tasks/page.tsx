@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 
+type TaskType = 'personal' | 'project'
+
 interface Task {
   id: string
   title: string
@@ -12,6 +14,8 @@ interface Task {
   priority: 'low' | 'medium' | 'high'
   due_date: string | null
   tags: string[]
+  task_type: TaskType
+  project: string | null
   created_at: string
   completed_at: string | null
 }
@@ -22,9 +26,13 @@ interface TaskForm {
   priority: 'low' | 'medium' | 'high'
   due_date: string
   tags: string
+  task_type: TaskType
+  project: string
 }
 
-const emptyTaskForm: TaskForm = { title: '', description: '', priority: 'medium', due_date: '', tags: '' }
+const emptyTaskForm: TaskForm = { title: '', description: '', priority: 'medium', due_date: '', tags: '', task_type: 'personal', project: '' }
+
+const DESCRIPTION_MAX = 10000
 
 const statusColors: Record<Task['status'], string> = {
   pending: 'bg-white/[0.04] text-text-secondary border-white/[0.06]',
@@ -50,6 +58,8 @@ const inputClass = 'w-full px-3 py-2 rounded-lg bg-white/[0.02] border border-wh
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [filter, setFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'personal' | string>('all')
+  const [projects, setProjects] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [taskForm, setTaskForm] = useState<TaskForm>(emptyTaskForm)
@@ -72,13 +82,34 @@ export default function TasksPage() {
 
     let query = supabase.from('tasks').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
     if (filter !== 'all') query = query.eq('status', filter)
+    if (typeFilter === 'personal') query = query.eq('task_type', 'personal')
+    else if (typeFilter !== 'all') query = query.eq('task_type', 'project').eq('project', typeFilter)
 
     const { data } = await query
     setTasks((data ?? []) as Task[])
     setLoading(false)
-  }, [filter])
+  }, [filter, typeFilter])
 
   useEffect(() => { loadTasks() }, [loadTasks])
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('pa_memory_items')
+        .select('project')
+        .eq('user_id', user.id)
+        .not('project', 'is', null)
+      const seen = new Set<string>()
+      for (const row of (data ?? []) as Array<{ project: string | null }>) {
+        if (row.project) seen.add(row.project)
+      }
+      setProjects([...seen].sort())
+    }
+    loadProjects()
+  }, [])
 
   function openCreateModal() {
     setEditingTask(null)
@@ -94,6 +125,8 @@ export default function TasksPage() {
       priority: task.priority,
       due_date: task.due_date ?? '',
       tags: task.tags?.join(', ') ?? '',
+      task_type: task.task_type,
+      project: task.project ?? '',
     })
     setShowTaskModal(true)
   }
@@ -144,12 +177,20 @@ export default function TasksPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    const projectValue = taskForm.project.trim()
+    if (taskForm.task_type === 'project' && !projectValue) {
+      showToast('Project is required when task type is "project"')
+      return
+    }
+
     const payload = {
       title: taskForm.title.trim(),
       description: taskForm.description.trim() || null,
       priority: taskForm.priority,
       due_date: taskForm.due_date || null,
       tags: taskForm.tags ? taskForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
+      task_type: taskForm.task_type,
+      project: taskForm.task_type === 'project' ? projectValue : null,
       updated_at: new Date().toISOString(),
     }
 
@@ -211,7 +252,7 @@ export default function TasksPage() {
         </button>
       </div>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-3">
         {filters.map((filterName) => (
           <button
             key={filterName}
@@ -221,6 +262,30 @@ export default function TasksPage() {
             }`}
           >
             {filterName === 'all' ? 'All' : filterName.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          onClick={() => setTypeFilter('all')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${typeFilter === 'all' ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'}`}
+        >
+          Any type
+        </button>
+        <button
+          onClick={() => setTypeFilter('personal')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${typeFilter === 'personal' ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'}`}
+        >
+          Personal
+        </button>
+        {projects.map((project) => (
+          <button
+            key={project}
+            onClick={() => setTypeFilter(project)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${typeFilter === project ? 'bg-neon/[0.1] text-neon border border-neon/30' : 'text-text-muted hover:text-text-secondary border border-white/[0.06]'}`}
+          >
+            {project}
           </button>
         ))}
       </div>
@@ -249,6 +314,11 @@ export default function TasksPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[task.priority]}`}>
                       {task.priority}
                     </span>
+                    {task.task_type === 'project' && task.project && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-neon/30 bg-neon/[0.06] text-neon">
+                        {task.project}
+                      </span>
+                    )}
                     {task.due_date && (
                       <span className="text-xs text-text-muted">Due: {new Date(task.due_date).toLocaleDateString('en-IN')}</span>
                     )}
@@ -321,12 +391,50 @@ export default function TasksPage() {
                   className={inputClass}
                 />
                 <textarea
-                  placeholder="Description (optional)"
+                  placeholder="Description (optional, up to 10000 chars)"
                   value={taskForm.description}
                   onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-                  rows={2}
+                  rows={3}
+                  maxLength={DESCRIPTION_MAX}
                   className={`${inputClass} resize-none`}
                 />
+                {taskForm.description.length >= 8000 && (
+                  <p className="text-[11px] text-text-muted text-right">{taskForm.description.length} / {DESCRIPTION_MAX}</p>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTaskForm({ ...taskForm, task_type: 'personal' })}
+                    className={`flex-1 py-2 rounded-lg border text-sm transition-all ${taskForm.task_type === 'personal' ? 'bg-neon text-bg-primary border-neon' : 'border-white/[0.08] text-text-secondary hover:border-white/[0.16]'}`}
+                  >
+                    Personal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskForm({ ...taskForm, task_type: 'project' })}
+                    className={`flex-1 py-2 rounded-lg border text-sm transition-all ${taskForm.task_type === 'project' ? 'bg-neon text-bg-primary border-neon' : 'border-white/[0.08] text-text-secondary hover:border-white/[0.16]'}`}
+                  >
+                    Project
+                  </button>
+                </div>
+
+                {taskForm.task_type === 'project' && (
+                  <>
+                    <input
+                      type="text"
+                      list="task-project-options"
+                      placeholder="Project name (e.g. sathi)"
+                      value={taskForm.project}
+                      onChange={(e) => setTaskForm({ ...taskForm, project: e.target.value })}
+                      required
+                      className={inputClass}
+                    />
+                    <datalist id="task-project-options">
+                      {projects.map((project) => <option key={project} value={project} />)}
+                    </datalist>
+                  </>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <select
                     value={taskForm.priority}

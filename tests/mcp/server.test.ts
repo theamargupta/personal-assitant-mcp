@@ -82,12 +82,13 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('get_habit_analytics')
     expect(toolNames).toContain('update_habit')
 
-    // Task tools (5)
+    // Task tools (6)
     expect(toolNames).toContain('create_task')
     expect(toolNames).toContain('list_tasks')
     expect(toolNames).toContain('update_task_status')
     expect(toolNames).toContain('complete_task')
     expect(toolNames).toContain('delete_task')
+    expect(toolNames).toContain('get_task')
 
     // Document tools (6)
     expect(toolNames).toContain('upload_document')
@@ -127,8 +128,8 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('consolidate_memories')
   })
 
-  it('registers exactly 40 tools total', () => {
+  it('registers exactly 43 tools total', () => {
     const server = createMcpServer() as unknown as { tools: Array<{ name: string }> }
-    expect(server.tools).toHaveLength(40)
+    expect(server.tools).toHaveLength(43)
   })
 })
