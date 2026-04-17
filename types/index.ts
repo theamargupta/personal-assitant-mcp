@@ -63,6 +63,62 @@ export function todayISTDate(): string {
     .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) // YYYY-MM-DD format
 }
 
+export function istWeekRange(today: string = todayISTDate()): { startDate: string; endDate: string } {
+  const [y, m, d] = today.split('-').map(Number)
+  const anchor = new Date(Date.UTC(y, m - 1, d))
+  const dow = anchor.getUTCDay() // 0=Sun..6=Sat
+  const mondayOffset = dow === 0 ? -6 : 1 - dow
+  const start = new Date(anchor)
+  start.setUTCDate(anchor.getUTCDate() + mondayOffset)
+  const end = new Date(start)
+  end.setUTCDate(start.getUTCDate() + 6)
+  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) }
+}
+
+export function istMonthStartISO(today: string = todayISTDate()): string {
+  const [y, m] = today.split('-')
+  // IST is UTC+05:30 with no DST
+  return new Date(`${y}-${m}-01T00:00:00+05:30`).toISOString()
+}
+
+function addDaysISO(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+export function currentStreakFromLogs(loggedDates: Iterable<string>, today: string = todayISTDate()): number {
+  const set = loggedDates instanceof Set ? loggedDates : new Set(loggedDates)
+  let cursor = today
+  if (!set.has(cursor)) {
+    const yesterday = addDaysISO(today, -1)
+    if (!set.has(yesterday)) return 0
+    cursor = yesterday
+  }
+  let streak = 0
+  while (set.has(cursor)) {
+    streak++
+    cursor = addDaysISO(cursor, -1)
+  }
+  return streak
+}
+
+export function maxCurrentStreak(
+  habits: Array<{ id: string; archived: boolean }>,
+  logsByHabit: Map<string, Iterable<string>>,
+  today: string = todayISTDate(),
+): number {
+  let best = 0
+  for (const h of habits) {
+    if (h.archived) continue
+    const logs = logsByHabit.get(h.id)
+    if (!logs) continue
+    const s = currentStreakFromLogs(logs, today)
+    if (s > best) best = s
+  }
+  return best
+}
+
 // ============ DOCUMENT TYPES ============
 
 export type DocType = 'pdf' | 'image' | 'other'

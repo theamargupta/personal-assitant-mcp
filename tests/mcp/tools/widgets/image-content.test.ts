@@ -60,14 +60,14 @@ registerFinanceTools(server)
 
 const authInfo = { extra: { userId: 'user-1' } }
 
-function expectSvgImage(result: { content: Array<{ type: string; data?: string; mimeType?: string }> }) {
+function expectPngImage(result: { content: Array<{ type: string; data?: string; mimeType?: string }> }) {
   const imageContent = result.content.find(content => content.type === 'image')
   expect(imageContent).toBeDefined()
-  expect(imageContent?.mimeType).toBe('image/svg+xml')
+  expect(imageContent?.mimeType).toBe('image/png')
 
-  const decoded = Buffer.from(imageContent?.data || '', 'base64').toString('utf8')
-  expect(decoded).toContain('<svg')
-  expect(decoded).toContain('</svg>')
+  const buf = Buffer.from(imageContent?.data || '', 'base64')
+  expect(buf.length).toBeGreaterThan(8)
+  expect(buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true)
 }
 
 describe('visual MCP image content', () => {
@@ -75,7 +75,7 @@ describe('visual MCP image content', () => {
     vi.clearAllMocks()
   })
 
-  it('adds base64 SVG image content to habit analytics without removing text', async () => {
+  it('adds base64 PNG image content to habit analytics without removing text', async () => {
     const today = todayISTDate()
     mockClient.from.mockImplementation((table: string) => {
       if (table === 'habits') {
@@ -90,16 +90,16 @@ describe('visual MCP image content', () => {
     )
 
     expect(result.content[0].type).toBe('text')
-    expectSvgImage(result)
+    expectPngImage(result)
   })
 
-  it('adds base64 SVG image content to spending summary without removing text', async () => {
+  it('adds base64 PNG image content to spending summary without removing text', async () => {
     const result = await registeredTools['get_spending_summary'].handler(
       { start_date: '2026-04-01', end_date: '2026-04-30' },
       { authInfo },
     )
 
     expect(result.content[0].type).toBe('text')
-    expectSvgImage(result)
+    expectPngImage(result)
   })
 })

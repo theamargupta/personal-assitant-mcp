@@ -160,6 +160,7 @@ describe('confirm_upload', () => {
     expect(parsed.chunks_created).toBe(2)
     expect(updateChain.update).toHaveBeenCalledWith({
       extracted_text: 'Hello world',
+      file_size: 0,
       status: 'ready',
     })
     expect(insertChain.insert).toHaveBeenCalledWith([

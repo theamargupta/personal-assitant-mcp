@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { SummaryCard } from '@/components/dashboard/SummaryCard'
+import { istMonthStartISO, istWeekRange, maxCurrentStreak } from '@/types'
 
 interface RecentItem {
   type: string
@@ -22,40 +23,26 @@ export default function DashboardOverview() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const now = new Date()
-      const weekAgo = new Date(now)
-      weekAgo.setDate(weekAgo.getDate() - 7)
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      const { startDate: weekStart, endDate: weekEnd } = istWeekRange()
+      const monthStartISO = istMonthStartISO()
 
-      const [habitsRes, tasksRes, spendRes, goalsRes, recentTasksRes, recentLogsRes] = await Promise.all([
-        // Best streak: count consecutive days of any habit log
-        supabase.from('habit_logs').select('logged_date').eq('user_id', user.id).order('logged_date', { ascending: false }).limit(100),
-        // Tasks completed this week
-        supabase.from('tasks').select('id').eq('user_id', user.id).eq('status', 'completed').gte('completed_at', weekAgo.toISOString()),
-        // Spending this month
-        supabase.from('transactions').select('amount').eq('user_id', user.id).gte('transaction_date', monthStart.toISOString()),
-        // Active goals
+      const [habitsRes, habitLogsRes, tasksRes, spendRes, goalsRes, recentTasksRes, recentLogsRes] = await Promise.all([
+        supabase.from('habits').select('id, archived').eq('user_id', user.id).eq('archived', false),
+        supabase.from('habit_logs').select('habit_id, logged_date').eq('user_id', user.id),
+        supabase.from('tasks').select('id').eq('user_id', user.id).in('status', ['pending', 'in_progress']).gte('due_date', weekStart).lte('due_date', weekEnd),
+        supabase.from('transactions').select('amount').eq('user_id', user.id).gte('transaction_date', monthStartISO),
         supabase.from('goals').select('id').eq('user_id', user.id).eq('status', 'active'),
-        // Recent tasks
         supabase.from('tasks').select('title, status, updated_at').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(5),
-        // Recent habit logs
         supabase.from('habit_logs').select('notes, logged_date, habits(name)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
       ])
 
-      // Calculate best streak from habit logs
-      let bestStreak = 0
-      if (habitsRes.data && habitsRes.data.length > 0) {
-        const dates = [...new Set(habitsRes.data.map(l => l.logged_date))].sort().reverse()
-        let streak = 1
-        for (let i = 1; i < dates.length; i++) {
-          const prev = new Date(dates[i - 1])
-          const curr = new Date(dates[i])
-          const diffDays = (prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24)
-          if (diffDays === 1) { streak++; bestStreak = Math.max(bestStreak, streak) }
-          else streak = 1
-        }
-        bestStreak = Math.max(bestStreak, streak)
+      const logsByHabit = new Map<string, Set<string>>()
+      for (const log of habitLogsRes.data ?? []) {
+        const set = logsByHabit.get(log.habit_id) ?? new Set<string>()
+        set.add(log.logged_date)
+        logsByHabit.set(log.habit_id, set)
       }
+      const bestStreak = maxCurrentStreak(habitsRes.data ?? [], logsByHabit)
 
       const totalSpent = spendRes.data?.reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
 

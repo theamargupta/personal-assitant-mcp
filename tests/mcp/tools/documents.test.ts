@@ -196,6 +196,7 @@ describe('confirm_upload', () => {
     expect(parsed.chunks_created).toBe(2)
     expect(updateDoc.update).toHaveBeenCalledWith({
       extracted_text: 'extracted text',
+      file_size: 0,
       status: 'ready',
     })
     expect(insertChunks.insert).toHaveBeenCalledWith([

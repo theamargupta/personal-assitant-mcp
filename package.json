@@ -7,7 +7,7 @@
     "postinstall": "node scripts/gen-ext-apps-bundle.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

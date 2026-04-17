@@ -70,7 +70,7 @@ widgets/                          # ExtApps HTML (habits, finance, goals, docume
     server.ts                       # Server-side Supabase client (SSR)
     service-role.ts                 # Service role client for backend ops
 types/
-  index.ts                          # TypeScript types + IST helpers
+  index.ts                          # TypeScript types + IST helpers (todayISTDate, toIST, istWeekRange, istMonthStartISO, currentStreakFromLogs, maxCurrentStreak)
 supabase/
   migrations/
     001_habits_and_tasks.sql        # habits, habit_logs, tasks tables
@@ -245,7 +245,7 @@ OPENAI_API_KEY=                    # OpenAI API key (for document embeddings)
 npm install
 npm run dev        # Start dev server
 npm run build      # Production build
-npm run lint       # ESLint
+npm run lint       # ESLint 9 flat config (eslint.config.mjs — extends eslint-config-next/core-web-vitals + /typescript)
 ```
 
 ## Current Status
