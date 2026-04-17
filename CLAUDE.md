@@ -2,6 +2,16 @@
 
 ## Overview
 
+## Nested Context
+- `app/` — layouts + dashboard route groups
+- `app/api/` — REST + MCP route conventions
+- `lib/mcp/` — server factory, tools, OAuth
+- `lib/memory/` — hybrid search, duplicate detection, stale hints
+- `lib/supabase/` — client selection (server / service-role)
+- `widgets/` — ExtApps HTML rules and bundling
+- `supabase/` — migrations + RLS + `pa_` prefix isolation
+- `tests/` — vitest conventions
+
 Sathi is a Personal Assistant MCP (Model Context Protocol) Server that provides Claude and other AI assistants with structured tools for managing habits and tasks. Deployed on Vercel at `sathi.devfrend.com`.
 
 **Version:** 0.1.0

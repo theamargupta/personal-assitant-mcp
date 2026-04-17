@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm run lint)",
+      "Bash(npm run start)",
+      "Bash(npm run test*)",
+      "Bash(npm run type-check)",
+      "Bash(npx vitest*)",
+      "Bash(npx tsc --noEmit*)",
+      "Bash(npx eslint *)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "bash .claude/hooks/block-env-commit.sh" }] },
+      { "matcher": "Write|Edit", "hooks": [
+        { "type": "command", "command": "bash .claude/hooks/prevent-tailwind-config.sh" },
+        { "type": "command", "command": "bash .claude/hooks/block-hard-delete-memory.sh" },
+        { "type": "command", "command": "bash .claude/hooks/enforce-ist.sh" }
+      ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "bash .claude/hooks/lint-on-write.sh" }] }
+    ]
+  }
+}
