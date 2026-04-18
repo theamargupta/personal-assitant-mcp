@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { Card, Chip, DashboardHero, EmptyState, SectionHeader, StatCard } from '@/components/dashboard/kit'
 
 type GoalType = 'outcome' | 'milestone'
 type GoalStatus = 'active' | 'completed' | 'failed'
@@ -348,131 +349,86 @@ export default function GoalsPage() {
     )
   }
 
+  const milestonesDone = Object.values(milestones).flat().filter((milestone) => milestone.completed).length
+  const onTrack = goals.filter((goal) => (goal.goal_type === 'milestone' ? getMilestoneProgress(goal.id) : getOutcomeProgress(goal)) >= 50).length
+
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[22px] font-bold text-text-primary tracking-[-0.02em]">Goals</h1>
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-sm font-semibold transition-all"
-        >
-          New Goal
-        </button>
+    <div className="space-y-8">
+      <DashboardHero
+        eyebrow="GOALS"
+        title="What you're chasing"
+        subtitle="Outcome targets and milestone checklists with progress visible before you open the card."
+        right={<button onClick={openCreateModal} className="rounded-full bg-neon px-5 py-3 text-sm font-semibold text-bg-primary transition-transform hover:scale-[1.02]">+ New goal</button>}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active" value={tab === 'active' ? goals.length : 0} hint="current filter" accent="neon" />
+        <StatCard label="Achieved" value={tab === 'completed' ? goals.length : 0} hint="current filter" accent="blue" />
+        <StatCard label="On Track" value={onTrack} hint="50%+ progress" accent="orange" />
+        <StatCard label="Milestones Done" value={milestonesDone} hint="checked items" accent="muted" />
       </div>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2">
         {statusTabs.map((status) => (
-          <button
-            key={status}
-            onClick={() => setTab(status)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
-              tab === status ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
+          <button key={status} onClick={() => setTab(status)} className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-all ${tab === status ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}>
             {status}
           </button>
         ))}
       </div>
 
-      {goals.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-12 text-center">
-          <p className="text-text-muted">No {tab} goals. Create one to start tracking.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {goals.map((goal, i) => {
-            const progress = goal.goal_type === 'milestone' ? getMilestoneProgress(goal.id) : getOutcomeProgress(goal)
-            return (
-              <motion.div
-                key={goal.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5"
-              >
-                <div className="flex items-start gap-4">
-                  <ProgressRing pct={progress} />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-text-primary">{goal.title}</h3>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                        goal.goal_type === 'outcome'
-                          ? 'bg-neon/[0.08] text-neon border-neon/[0.12]'
-                          : 'bg-white/[0.04] text-text-secondary border-white/[0.06]'
-                      }`}>
-                        {goal.goal_type}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadgeClasses[goal.status]}`}>
-                        {goal.status}
-                      </span>
-                    </div>
-
-                    {goal.description && <p className="text-xs text-text-muted mb-2">{goal.description}</p>}
-
-                    <div className="flex flex-wrap gap-3 text-xs text-text-muted mb-3">
-                      {goal.metric_type && <span className="capitalize">{fromDbMetric(goal.metric_type).replace('_', ' ')}</span>}
-                      {goal.target_value != null && <span>Target: {Number(goal.target_value).toLocaleString('en-IN')}</span>}
-                      <span>{new Date(goal.start_date).toLocaleDateString('en-IN')} - {new Date(goal.end_date).toLocaleDateString('en-IN')}</span>
-                    </div>
-
-                    {goal.goal_type === 'milestone' && (
-                      <div className="space-y-2">
-                        {(milestones[goal.id] ?? []).map((milestone) => (
-                          <label key={milestone.id} className="flex items-center gap-2 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              checked={milestone.completed}
-                              onChange={() => toggleMilestone(milestone)}
-                              className="w-4 h-4 rounded border-white/[0.12] bg-white/[0.04] text-neon focus:ring-neon/20"
-                            />
-                            <span className={`text-sm ${milestone.completed ? 'line-through text-text-muted' : 'text-text-secondary group-hover:text-text-primary'}`}>
-                              {milestone.title}
-                            </span>
-                          </label>
-                        ))}
-                        <form
-                          onSubmit={(event) => {
-                            event.preventDefault()
-                            addMilestone(goal)
-                          }}
-                          className="flex gap-2 pt-2"
-                        >
-                          <input
-                            type="text"
-                            placeholder="Add milestone"
-                            value={milestoneInputs[goal.id] ?? ''}
-                            onChange={(e) => setMilestoneInputs((current) => ({ ...current, [goal.id]: e.target.value }))}
-                            className={inputClass}
-                          />
-                          <button type="submit" className="h-10 w-10 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-lg font-semibold transition-all">+</button>
-                        </form>
+      <section>
+        <SectionHeader eyebrow="GOAL CARDS" title={`${tab[0].toUpperCase()}${tab.slice(1)} goals`} />
+        {goals.length === 0 ? (
+          <EmptyState title={`No ${tab} goals`} copy="Create one outcome or milestone goal to put a target on the board." action={<button onClick={openCreateModal} className="rounded-full bg-neon px-4 py-2 text-xs font-semibold text-bg-primary">Create goal</button>} />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {goals.map((goal, i) => {
+              const progress = goal.goal_type === 'milestone' ? getMilestoneProgress(goal.id) : getOutcomeProgress(goal)
+              return (
+                <motion.div key={goal.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                  <Card hoverable className="p-5">
+                    <div className="flex items-start gap-4">
+                      <ProgressRing pct={progress} />
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-text-primary">{goal.title}</h3>
+                          <Chip variant={goal.goal_type === 'outcome' ? 'status-completed' : 'tag'}>{goal.goal_type}</Chip>
+                          <span className={`rounded-full border px-2.5 py-1 text-[11px] leading-none ${statusBadgeClasses[goal.status]}`}>{goal.status}</span>
+                        </div>
+                        {goal.description && <p className="mb-3 line-clamp-2 text-xs leading-5 text-text-muted">{goal.description}</p>}
+                        <div className="mb-4 flex flex-wrap gap-3 text-xs text-text-muted">
+                          {goal.metric_type && <span className="capitalize">{fromDbMetric(goal.metric_type).replace('_', ' ')}</span>}
+                          {goal.target_value != null && <span>Target: {Number(goal.target_value).toLocaleString('en-IN')}</span>}
+                          <span>{new Date(goal.end_date).toLocaleDateString('en-IN')}</span>
+                          {goal.goal_type === 'outcome' && <span>auto-updated by time window</span>}
+                        </div>
+                        {goal.goal_type === 'milestone' && (
+                          <div className="space-y-2">
+                            {(milestones[goal.id] ?? []).map((milestone) => (
+                              <label key={milestone.id} className="group flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/[0.02]">
+                                <input type="checkbox" checked={milestone.completed} onChange={() => toggleMilestone(milestone)} className="h-4 w-4 rounded border-white/[0.12] bg-white/[0.04] text-neon focus:ring-neon/20" />
+                                <span className={`text-sm ${milestone.completed ? 'text-text-muted line-through' : 'text-text-secondary group-hover:text-text-primary'}`}>{milestone.title}</span>
+                              </label>
+                            ))}
+                            <form onSubmit={(event) => { event.preventDefault(); addMilestone(goal) }} className="flex gap-2 pt-2">
+                              <input type="text" placeholder="Add milestone" value={milestoneInputs[goal.id] ?? ''} onChange={(e) => setMilestoneInputs((current) => ({ ...current, [goal.id]: e.target.value }))} className={inputClass} />
+                              <button type="submit" className="h-10 w-10 rounded-full bg-neon text-lg font-semibold text-bg-primary">+</button>
+                            </form>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => openEditModal(goal)}
-                      aria-label={`Edit ${goal.title}`}
-                      className="h-8 w-8 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary hover:border-white/[0.12] transition-all"
-                    >
-                      ✎
-                    </button>
-                    <button
-                      onClick={() => setDeleteGoalTarget(goal)}
-                      aria-label={`Delete ${goal.title}`}
-                      className="h-8 w-8 rounded-lg bg-red-500/[0.1] text-red-400 border border-red-500/[0.15] hover:bg-red-500/[0.2] transition-all"
-                    >
-                      🗑
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
+                      <div className="flex gap-2">
+                        <button onClick={() => openEditModal(goal)} aria-label={`Edit ${goal.title}`} className="h-8 w-8 rounded-full border border-white/[0.08] text-text-secondary hover:text-text-primary">✎</button>
+                        <button onClick={() => setDeleteGoalTarget(goal)} aria-label={`Delete ${goal.title}`} className="h-8 w-8 rounded-full border border-red-500/[0.15] bg-red-500/[0.08] text-red-400">×</button>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       <AnimatePresence>
         {showGoalModal && (

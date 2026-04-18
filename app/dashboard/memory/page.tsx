@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_SPACES } from '@/lib/memory/types'
+import { Card, Chip, DashboardHero, EmptyState, SectionHeader, StatCard } from '@/components/dashboard/kit'
 
 interface MemorySpace {
   id: string
@@ -197,125 +198,105 @@ export default function MemoryPage() {
     )
   }
 
+  const ruleMemories = filtered.filter((memory) => memory.category === 'rule')
+  const spacesWithMemories = new Set(memories.map((memory) => memory.space_id)).size
+
   return (
-    <div className="max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-text-primary">Memory Vaults</h1>
-        <button
-          type="button"
-          onClick={() => setShowCreateModal(true)}
-          className="rounded-lg bg-neon/[0.15] px-3 py-1.5 text-xs font-medium text-neon transition-all hover:bg-neon/[0.25]"
-        >
-          + New Memory
-        </button>
+    <div className="space-y-8">
+      <DashboardHero
+        eyebrow="MEMORY"
+        title="Your second brain"
+        subtitle="Rules, context, decisions, and project notes in a grid you can scan fast."
+        right={
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select value={activeSpace ?? ''} onChange={(e) => setActiveSpace(e.target.value || null)} className="rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm text-text-primary outline-none">
+              {spaces.map((space) => <option key={space.slug} value={space.slug}>{space.icon} {space.name}</option>)}
+            </select>
+            <button type="button" onClick={() => setShowCreateModal(true)} className="rounded-full bg-neon px-5 py-3 text-sm font-semibold text-bg-primary">+ Save memory</button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Total Memories" value={memories.length} hint="current view" accent="neon" />
+        <StatCard label="Spaces" value={spacesWithMemories || spaces.length} hint="available vaults" accent="blue" />
+        <StatCard label="Rules" value={memories.filter((memory) => memory.category === 'rule').length} hint="pinned behavior" accent="orange" />
       </div>
 
-      <div className="mb-4 flex gap-2 overflow-x-auto">
-        {spaces.map((space) => (
-          <button
-            type="button"
-            key={space.slug}
-            onClick={() => setActiveSpace(space.slug)}
-            className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              activeSpace === space.slug
-                ? 'bg-neon/[0.1] text-neon'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            <span>{space.icon}</span>
-            {space.name}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-4 flex gap-1.5 overflow-x-auto">
-        {CATEGORIES.map((cat) => (
-          <button
-            type="button"
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`rounded-md px-2 py-1 text-[10px] font-medium capitalize transition-all ${
-              activeCategory === cat
-                ? 'bg-white/[0.1] text-text-primary'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-6">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search memories..."
-          className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-neon/30 focus:outline-none"
-        />
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] p-12 text-center">
-          <p className="text-sm text-text-muted">No memories yet.</p>
-        </div>
-      ) : (
-        <div className="grid gap-3">
-          <AnimatePresence mode="popLayout">
-            {filtered.map((memory) => (
-              <motion.div
-                key={memory.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all hover:border-white/[0.1]"
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <h3 className="text-sm font-medium text-text-primary">{memory.title}</h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-muted capitalize">
-                        {memory.category}
-                      </span>
-                      {memory.project && (
-                        <span className="rounded-md bg-neon/[0.08] px-1.5 py-0.5 text-[10px] text-neon">
-                          {memory.project}
-                        </span>
-                      )}
-                      {memory.tags.map((tag) => (
-                        <span key={tag} className="text-[10px] text-text-muted">#{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(memory)}
-                      className="rounded-md p-1 text-text-muted hover:bg-white/[0.06] hover:text-text-primary"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(memory.id)}
-                      className="rounded-md p-1 text-text-muted hover:bg-red-500/[0.1] hover:text-red-400"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">
-                  {memory.content}
-                </p>
-              </motion.div>
+      <Card className="p-4">
+        <div className="space-y-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search memories, projects, snippets"
+            className="w-full rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-neon/30 focus:outline-none"
+          />
+          <div className="flex gap-1.5 overflow-x-auto">
+            {CATEGORIES.map((cat) => (
+              <button type="button" key={cat} onClick={() => setActiveCategory(cat)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-medium capitalize transition-all ${activeCategory === cat ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}>
+                {cat}
+              </button>
             ))}
-          </AnimatePresence>
+          </div>
         </div>
+      </Card>
+
+      {ruleMemories.length > 0 && (
+        <section>
+          <SectionHeader eyebrow="PINNED" title="Rules" />
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {ruleMemories.slice(0, 6).map((memory) => (
+              <Card key={memory.id} className="min-w-[260px] p-4">
+                <Chip variant="status-completed">rule</Chip>
+                <p className="mt-3 line-clamp-3 text-sm leading-6 text-text-secondary">{memory.content}</p>
+              </Card>
+            ))}
+          </div>
+        </section>
       )}
+
+      <section>
+        <SectionHeader eyebrow="MEMORY GRID" title="Saved context" />
+        {filtered.length === 0 ? (
+          <EmptyState title="No memories yet" copy="Save one preference, rule, or decision and it will show up here." action={<button type="button" onClick={() => setShowCreateModal(true)} className="rounded-full bg-neon px-4 py-2 text-xs font-semibold text-bg-primary">Save memory</button>} />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <AnimatePresence mode="popLayout">
+              {filtered.map((memory) => (
+                <motion.div key={memory.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                  <Card hoverable className="group h-full p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-semibold text-text-primary">{memory.title}</h3>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <Chip variant={memory.category === 'rule' ? 'status-completed' : 'tag'}>{memory.category}</Chip>
+                          {memory.project && <Chip variant="status-in-progress">{memory.project}</Chip>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                        <button type="button" onClick={() => openEdit(memory)} className="h-8 w-8 rounded-full border border-white/[0.06] text-text-muted hover:text-text-primary">✎</button>
+                        <button type="button" onClick={() => void handleDelete(memory.id)} className="h-8 w-8 rounded-full border border-red-500/[0.15] bg-red-500/[0.08] text-red-400">×</button>
+                      </div>
+                    </div>
+                    <p className="line-clamp-3 text-xs leading-6 text-text-secondary">{memory.content}</p>
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {memory.tags.slice(0, 4).map((tag) => <Chip key={tag} variant="tag">#{tag}</Chip>)}
+                    </div>
+                    <div className="mt-4">
+                      <div className="mb-1 flex items-center justify-between text-[11px] text-text-muted">
+                        <span>Importance</span>
+                        <span>{memory.importance}/10</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/[0.04]"><div className="h-full rounded-full bg-neon" style={{ width: `${Math.min(100, memory.importance * 10)}%` }} /></div>
+                    </div>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </section>
 
       <AnimatePresence>
         {showCreateModal && (

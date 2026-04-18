@@ -40,10 +40,10 @@ const surfaces = [
     mobile: false,
   },
   {
-    label: 'iOS app',
+    label: 'Android app',
     caption: 'Log on the go.',
     src: '/landing/mobile-rituals.png',
-    alt: 'Sathi iOS rituals screen',
+    alt: 'Sathi Android rituals screen',
     width: 400,
     height: 867,
     mobile: true,

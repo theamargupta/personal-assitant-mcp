@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, type FormEvent, type KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { Card, Chip, DashboardHero, EmptyState, ProgressBar, SectionHeader, StatCard } from '@/components/dashboard/kit'
 
 type TaskType = 'personal' | 'project'
 
@@ -42,18 +43,6 @@ const emptyTaskForm: TaskForm = { title: '', description: '', priority: 'medium'
 
 const DESCRIPTION_MAX = 10000
 
-const statusColors: Record<Task['status'], string> = {
-  pending: 'bg-white/[0.04] text-text-secondary border-white/[0.06]',
-  in_progress: 'bg-white/[0.04] text-text-secondary border-white/[0.06]',
-  completed: 'bg-neon/[0.08] text-neon border-neon/[0.12]',
-}
-
-const priorityColors: Record<Task['priority'], string> = {
-  high: 'bg-white/[0.04] text-red-400',
-  medium: 'bg-white/[0.04] text-text-secondary',
-  low: 'bg-white/[0.04] text-text-muted',
-}
-
 const statusCycle: Record<Task['status'], Task['status']> = {
   pending: 'in_progress',
   in_progress: 'completed',
@@ -63,6 +52,30 @@ const statusCycle: Record<Task['status'], Task['status']> = {
 const filters = ['all', 'pending', 'in_progress', 'completed'] as const
 const inputClass = 'w-full px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06] text-text-primary text-[14px] placeholder:text-text-muted focus:outline-none focus:border-neon/30 focus:ring-1 focus:ring-neon/20'
 
+function taskGroup(task: Task) {
+  if (!task.due_date) return 'No Due Date'
+  const today = new Date()
+  const todayIso = today.toISOString().split('T')[0]
+  const week = new Date()
+  week.setDate(today.getDate() + 7)
+  const weekIso = week.toISOString().split('T')[0]
+  if (task.due_date === todayIso) return 'Today'
+  if (task.due_date <= weekIso) return 'This Week'
+  return 'Later'
+}
+
+function priorityVariant(priority: Task['priority']) {
+  if (priority === 'high') return 'priority-high' as const
+  if (priority === 'medium') return 'priority-medium' as const
+  return 'priority-low' as const
+}
+
+function statusVariant(status: Task['status']) {
+  if (status === 'completed') return 'status-completed' as const
+  if (status === 'in_progress') return 'status-in-progress' as const
+  return 'status-pending' as const
+}
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [subtasksByParent, setSubtasksByParent] = useState<Record<string, Task[]>>({})
@@ -71,6 +84,7 @@ export default function TasksPage() {
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, string>>({})
   const [filter, setFilter] = useState<string>('all')
   const [typeFilter, setTypeFilter] = useState<'all' | 'personal' | string>('all')
+  const [search, setSearch] = useState('')
   const [projects, setProjects] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -428,153 +442,120 @@ export default function TasksPage() {
     )
   }
 
+  const visibleTasks = tasks.filter((task) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return task.title.toLowerCase().includes(q) ||
+      (task.description ?? '').toLowerCase().includes(q) ||
+      task.tags.some((tag) => tag.toLowerCase().includes(q)) ||
+      (task.project ?? '').toLowerCase().includes(q)
+  })
+  const groupedTasks = ['Today', 'This Week', 'Later', 'No Due Date'].map((group) => ({
+    group,
+    items: visibleTasks.filter((task) => taskGroup(task) === group),
+  })).filter((group) => group.items.length > 0)
+  const completedThisWeek = tasks.filter((task) => {
+    if (!task.completed_at) return false
+    const completed = new Date(task.completed_at)
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    return completed >= weekAgo
+  }).length
+  const overdue = tasks.filter((task) => task.status !== 'completed' && task.due_date && task.due_date < new Date().toISOString().split('T')[0]).length
+
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[22px] font-bold text-text-primary tracking-[-0.02em]">Tasks</h1>
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-sm font-semibold transition-all"
-        >
-          New Task
-        </button>
+    <div className="space-y-8">
+      <DashboardHero
+        eyebrow="TASKS"
+        title="On your plate"
+        subtitle="The work board is grouped by urgency, with subtasks close enough to act on without opening another screen."
+        right={<button onClick={openCreateModal} className="rounded-full bg-neon px-5 py-3 text-sm font-semibold text-bg-primary transition-transform hover:scale-[1.02]">+ New task</button>}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Pending" value={tasks.filter((task) => task.status === 'pending').length} hint="waiting for first move" accent="muted" />
+        <StatCard label="In Progress" value={tasks.filter((task) => task.status === 'in_progress').length} hint="currently active" accent="blue" />
+        <StatCard label="Completed Week" value={completedThisWeek} hint="closed recently" accent="neon" />
+        <StatCard label="Overdue" value={overdue} hint="needs attention" accent={overdue > 0 ? 'red' : 'muted'} />
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-3">
-        {filters.map((filterName) => (
-          <button
-            key={filterName}
-            onClick={() => setFilter(filterName)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
-              filter === filterName ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            {filterName === 'all' ? 'All' : filterName.replace('_', ' ')}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-2 mb-6">
-        <button
-          onClick={() => setTypeFilter('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${typeFilter === 'all' ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'}`}
-        >
-          Any type
-        </button>
-        <button
-          onClick={() => setTypeFilter('personal')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${typeFilter === 'personal' ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'}`}
-        >
-          Personal
-        </button>
-        {projects.map((project) => (
-          <button
-            key={project}
-            onClick={() => setTypeFilter(project)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${typeFilter === project ? 'bg-neon/[0.1] text-neon border border-neon/30' : 'text-text-muted hover:text-text-secondary border border-white/[0.06]'}`}
-          >
-            {project}
-          </button>
-        ))}
-      </div>
-
-      {tasks.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-12 text-center">
-          <p className="text-text-muted">No tasks found. Create one.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {tasks.map((task, i) => {
-            const subs = subtasksByParent[task.id] ?? []
-            const progress = progressByParent[task.id] ?? { completed: 0, total: 0, pct: 0 }
-            const expanded = expandedParents.has(task.id)
-            return (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-4"
+      <Card className="p-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {filters.map((filterName) => (
+              <button
+                key={filterName}
+                onClick={() => setFilter(filterName)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-all ${filter === filterName ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className={`font-medium ${task.status === 'completed' ? 'line-through text-text-muted' : 'text-text-primary'}`}>
-                      {task.title}
-                    </h3>
-                    {task.description && <p className="text-xs text-text-muted mt-1 truncate">{task.description}</p>}
-                    <div className="flex flex-wrap gap-2 mt-2 items-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[task.priority]}`}>
-                        {task.priority}
-                      </span>
-                      {task.task_type === 'project' && task.project && (
-                        <span className="text-xs px-2 py-0.5 rounded-full border border-neon/30 bg-neon/[0.06] text-neon">
-                          {task.project}
-                        </span>
-                      )}
-                      {task.due_date && (
-                        <span className="text-xs text-text-muted">Due: {new Date(task.due_date).toLocaleDateString('en-IN')}</span>
-                      )}
-                      {task.tags?.map((tag) => (
-                        <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-text-muted">{tag}</span>
-                      ))}
-                      {progress.total > 0 && (
-                        <button
-                          onClick={() => toggleExpanded(task.id)}
-                          className={`text-xs px-2 py-0.5 rounded-full border transition-all ${progress.completed === progress.total ? 'border-neon/30 bg-neon/[0.08] text-neon' : 'border-white/[0.08] bg-white/[0.02] text-text-secondary hover:border-white/[0.16]'}`}
-                        >
-                          {expanded ? '▾' : '▸'} {progress.completed}/{progress.total}
-                        </button>
-                      )}
-                      {progress.total === 0 && (
-                        <button
-                          onClick={() => toggleExpanded(task.id)}
-                          className="text-xs px-2 py-0.5 rounded-full border border-dashed border-white/[0.08] text-text-muted hover:text-text-secondary hover:border-white/[0.16] transition-all"
-                        >
-                          + subtasks
-                        </button>
-                      )}
-                    </div>
-                    {progress.total > 0 && (
-                      <div className="mt-3 h-1 rounded-full bg-white/[0.04] overflow-hidden">
-                        <div
-                          className="h-full bg-neon/60 transition-all"
-                          style={{ width: `${progress.pct}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {task.status !== 'completed' && (
-                      <button
-                        onClick={() => completeTask(task)}
-                        aria-label={`Complete ${task.title}`}
-                        className="h-8 w-8 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-sm font-bold transition-all"
-                      >
-                        ✓
-                      </button>
-                    )}
-                    <button
-                      onClick={() => cycleStatus(task)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-all hover:opacity-80 ${statusColors[task.status]}`}
-                    >
-                      {task.status.replace('_', ' ')}
-                    </button>
-                    <button
-                      onClick={() => openEditModal(task)}
-                      aria-label={`Edit ${task.title}`}
-                      className="h-8 w-8 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary hover:border-white/[0.12] transition-all"
-                    >
-                      ✎
-                    </button>
-                    <button
-                      onClick={() => setDeleteTaskTarget(task)}
-                      aria-label={`Delete ${task.title}`}
-                      className="h-8 w-8 rounded-lg bg-red-500/[0.1] text-red-400 border border-red-500/[0.15] hover:bg-red-500/[0.2] transition-all"
-                    >
-                      🗑
-                    </button>
-                  </div>
-                </div>
+                {filterName === 'all' ? 'All' : filterName.replace('_', ' ')}
+              </button>
+            ))}
+            <button onClick={() => setTypeFilter('all')} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${typeFilter === 'all' ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}>All types</button>
+            <button onClick={() => setTypeFilter('personal')} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${typeFilter === 'personal' ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}>Personal</button>
+            {projects.map((project) => (
+              <button key={project} onClick={() => setTypeFilter(project)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${typeFilter === project ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}>{project}</button>
+            ))}
+          </div>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search tasks, tags, projects"
+            className="w-full rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-neon/25 xl:max-w-xs"
+          />
+        </div>
+      </Card>
+
+      <section>
+        <SectionHeader eyebrow="TASK LIST" title="Grouped by due date" />
+        {visibleTasks.length === 0 ? (
+          <EmptyState title="No tasks found" copy="Create a task or loosen the filters to bring work back into view." action={<button onClick={openCreateModal} className="rounded-full bg-neon px-4 py-2 text-xs font-semibold text-bg-primary">Create task</button>} />
+        ) : (
+          <div className="space-y-6">
+            {groupedTasks.map(({ group, items }) => (
+              <div key={group}>
+                <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.24em] text-text-muted">{group}</p>
+                <div className="space-y-3">
+                  {items.map((task, i) => {
+                    const subs = subtasksByParent[task.id] ?? []
+                    const progress = progressByParent[task.id] ?? { completed: 0, total: 0, pct: 0 }
+                    const expanded = expandedParents.has(task.id)
+                    return (
+                      <motion.div key={task.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                        <Card hoverable className="p-4">
+                          <div className="flex items-start gap-4">
+                            <button
+                              onClick={() => task.status === 'completed' ? cycleStatus(task) : completeTask(task)}
+                              aria-label={`Toggle ${task.title}`}
+                              className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-all ${task.status === 'completed' ? 'border-neon bg-neon text-bg-primary' : 'border-white/[0.16] hover:border-neon/60'}`}
+                            >
+                              {task.status === 'completed' && <span className="text-[10px] font-bold">✓</span>}
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div className="min-w-0">
+                                  <h3 className={`font-medium tracking-[-0.01em] ${task.status === 'completed' ? 'text-text-muted line-through' : 'text-text-primary'}`}>{task.title}</h3>
+                                  {task.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">{task.description}</p>}
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
+                                  <button onClick={() => cycleStatus(task)}><Chip variant={statusVariant(task.status)}>{task.status.replace('_', ' ')}</Chip></button>
+                                  <button onClick={() => openEditModal(task)} aria-label={`Edit ${task.title}`} className="h-8 w-8 rounded-full border border-white/[0.06] text-text-secondary hover:text-text-primary">✎</button>
+                                  <button onClick={() => setDeleteTaskTarget(task)} aria-label={`Delete ${task.title}`} className="h-8 w-8 rounded-full border border-red-500/[0.15] bg-red-500/[0.08] text-red-400">×</button>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <Chip variant={priorityVariant(task.priority)}>{task.priority}</Chip>
+                                {task.task_type === 'project' && task.project && <Chip variant="status-completed">{task.project}</Chip>}
+                                {task.due_date && <span className="text-xs text-text-muted">Due {new Date(task.due_date).toLocaleDateString('en-IN')}</span>}
+                                {task.tags?.slice(0, 3).map((tag) => <Chip key={tag} variant="tag">#{tag}</Chip>)}
+                                <button onClick={() => toggleExpanded(task.id)} className="rounded-full border border-dashed border-white/[0.08] px-2.5 py-1 text-xs text-text-muted transition-all hover:text-text-secondary">
+                                  {expanded ? 'Hide' : 'Show'} subtasks {progress.total > 0 ? `${progress.completed}/${progress.total}` : '+'}
+                                </button>
+                              </div>
+                              {progress.total > 0 && <ProgressBar className="mt-3" value={progress.pct} />}
+                            </div>
+                          </div>
 
                 <AnimatePresence initial={false}>
                   {expanded && (
@@ -665,11 +646,16 @@ export default function TasksPage() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
+                        </Card>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <AnimatePresence>
         {showTaskModal && (

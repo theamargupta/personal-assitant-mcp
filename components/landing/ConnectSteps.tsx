@@ -133,8 +133,8 @@ export function ConnectSteps() {
             </a>
           </StepCard>
 
-          <StepCard number="05" eyebrow="MOBILE" title="TestFlight — coming soon">
-            <p>Voice-first, Hinglish-first. SMS-to-transaction. Notify → log → forget.</p>
+          <StepCard number="05" eyebrow="MOBILE" title="Play Store beta — coming soon">
+            <p>Android-first and Hinglish-first. Play Store beta and APK access for SMS-to-transaction, notify, log, forget.</p>
             <button
               type="button"
               disabled

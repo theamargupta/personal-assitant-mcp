@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { Card, Chip, DashboardHero, EmptyState, SectionHeader, StatCard } from '@/components/dashboard/kit'
 
 interface Transaction {
   id: string
@@ -26,6 +27,7 @@ interface CategorySummary {
   icon: string
   total: number
   pct: number
+  count: number
 }
 
 interface TransactionForm {
@@ -45,8 +47,6 @@ function toDateInputValue(date: string) {
 
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [categories, setCategories] = useState<CategorySummary[]>([])
-  const [totalSpent, setTotalSpent] = useState(0)
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [showCategories, setShowCategories] = useState(false)
@@ -63,6 +63,7 @@ export default function FinancePage() {
   const [deleteTxTarget, setDeleteTxTarget] = useState<Transaction | null>(null)
   const [newCategory, setNewCategory] = useState({ name: '', icon: '💰' })
   const [txFilter, setTxFilter] = useState<'all' | 'uncategorized'>('all')
+  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month')
   const [toast, setToast] = useState('')
 
   const showToast = useCallback((message: string) => {
@@ -99,19 +100,6 @@ export default function FinancePage() {
     setCatList((catRes.data ?? []) as Category[])
     setTransactions(txs)
 
-    const total = txs.reduce((sum, tx) => sum + Number(tx.amount), 0)
-    setTotalSpent(total)
-
-    const map = new Map<string, { name: string; icon: string; total: number }>()
-    txs.forEach((tx) => {
-      const name = tx.spending_categories?.name ?? 'Uncategorized'
-      const icon = tx.spending_categories?.icon ?? '❓'
-      const existing = map.get(name) ?? { name, icon, total: 0 }
-      existing.total += Number(tx.amount)
-      map.set(name, existing)
-    })
-    const sorted = [...map.values()].sort((a, b) => b.total - a.total)
-    setCategories(sorted.map((category) => ({ ...category, pct: total > 0 ? Math.round((category.total / total) * 100) : 0 })))
     setLoading(false)
   }, [])
 
@@ -286,84 +274,107 @@ export default function FinancePage() {
     )
   }
 
+  const periodStart = new Date()
+  if (period === 'week') periodStart.setDate(periodStart.getDate() - 7)
+  else if (period === 'month') periodStart.setDate(1)
+  else periodStart.setMonth(0, 1)
+
+  const periodTransactions = transactions.filter((transaction) => new Date(transaction.transaction_date) >= periodStart)
   const displayedTransactions = txFilter === 'uncategorized'
-    ? transactions.filter((transaction) => !transaction.category_id)
-    : transactions
+    ? periodTransactions.filter((transaction) => !transaction.category_id)
+    : periodTransactions
+  const periodSpent = periodTransactions.reduce((sum, tx) => sum + Number(tx.amount), 0)
+  const biggest = periodTransactions.reduce((max, tx) => Math.max(max, Number(tx.amount)), 0)
+  const uncategorized = periodTransactions.filter((tx) => !tx.category_id).length
+  const categoryMap = new Map<string, CategorySummary>()
+  periodTransactions.forEach((tx) => {
+    const name = tx.spending_categories?.name ?? 'Uncategorized'
+    const icon = tx.spending_categories?.icon ?? '❓'
+    const current = categoryMap.get(name) ?? { name, icon, total: 0, pct: 0, count: 0 }
+    current.total += Number(tx.amount)
+    current.count += 1
+    categoryMap.set(name, current)
+  })
+  const displayCategories = [...categoryMap.values()]
+    .sort((a, b) => b.total - a.total)
+    .map((category) => ({ ...category, pct: periodSpent > 0 ? Math.round((category.total / periodSpent) * 100) : 0 }))
+  const topCategory = displayCategories[0]?.name ?? 'None'
 
   return (
-    <div className="max-w-5xl">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-[22px] font-bold text-text-primary tracking-[-0.02em]">Finance</h1>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-4 py-2 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-sm font-semibold transition-all"
-        >
-          Add Expense
-        </button>
+    <div className="space-y-8">
+      <DashboardHero
+        eyebrow="FINANCE"
+        title="This month"
+        subtitle="Spend, categories, and uncategorized items in one dense money view."
+        right={<button onClick={() => setShowAdd(true)} className="rounded-full bg-neon px-5 py-3 text-sm font-semibold text-bg-primary transition-transform hover:scale-[1.02]">+ Add transaction</button>}
+      />
+
+      <div className="flex flex-wrap gap-2">
+        {(['week', 'month', 'year'] as const).map((option) => (
+          <button
+            key={option}
+            onClick={() => setPeriod(option)}
+            className={`rounded-full border px-4 py-2 text-xs font-medium capitalize transition-all ${period === option ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}
+          >
+            {option}
+          </button>
+        ))}
       </div>
 
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 mb-8">
-        <p className="text-[11px] font-semibold text-neon uppercase tracking-[0.15em] mb-2">Spent this month</p>
-        <p className="text-3xl font-bold text-text-primary">₹{totalSpent.toLocaleString('en-IN')}</p>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total Spent" value={`₹${periodSpent.toLocaleString('en-IN')}`} hint={period} accent="neon" />
+        <StatCard label="Top Category" value={topCategory} hint="highest spend" accent="orange" />
+        <StatCard label="Biggest Expense" value={`₹${biggest.toLocaleString('en-IN')}`} hint="single transaction" accent="red" />
+        <StatCard label="Uncategorized" value={uncategorized} hint="needs sorting" accent={uncategorized > 0 ? 'blue' : 'muted'} />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[11px] font-semibold text-neon uppercase tracking-[0.15em]">By Category</h3>
-            <button
-              onClick={() => setShowCategories(true)}
-              className="h-8 w-8 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary hover:border-white/[0.12] transition-all"
-              aria-label="Manage categories"
-            >
-              ⚙
-            </button>
-          </div>
-          {categories.length === 0 ? (
-            <p className="text-text-muted text-xs">No spending this month</p>
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <Card className="p-5">
+          <SectionHeader
+            eyebrow="SPENDING"
+            title="By category"
+            right={<button onClick={() => setShowCategories(true)} className="rounded-full border border-white/[0.06] px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary">Manage</button>}
+          />
+          {displayCategories.length === 0 ? (
+            <EmptyState title="No spending here" copy="Add transactions and categories will light up." />
           ) : (
-            <div className="space-y-3">
-              {categories.map((category) => (
-                <div key={category.name} className="space-y-1">
-                  <div className="flex justify-between gap-3 text-xs">
-                    <span className="text-text-secondary truncate">{category.icon} {category.name}</span>
-                    <span className="text-text-muted whitespace-nowrap">₹{category.total.toLocaleString('en-IN')} ({category.pct}%)</span>
+            <div className="space-y-4">
+              {displayCategories.map((category) => (
+                <div key={category.name} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate text-text-secondary">{category.icon} {category.name}</span>
+                    <span className="whitespace-nowrap font-mono text-text-primary">₹{category.total.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-white/[0.04]">
-                    <motion.div
-                      className="h-full rounded-full bg-neon"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${category.pct}%` }}
-                      transition={{ duration: 0.8 }}
-                    />
+                  <div className="flex items-center gap-3">
+                    <div className="h-2 flex-1 rounded-full bg-white/[0.04]">
+                      <motion.div className="h-full rounded-full bg-neon" initial={{ width: 0 }} animate={{ width: `${category.pct}%` }} transition={{ duration: 0.8 }} />
+                    </div>
+                    <span className="w-16 text-right text-xs text-text-muted">{category.pct}% · {category.count}</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <h3 className="text-[11px] font-semibold text-neon uppercase tracking-[0.15em]">Recent Transactions</h3>
-            <div className="flex gap-2">
-              {(['all', 'uncategorized'] as const).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setTxFilter(filter)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
-                    txFilter === filter ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  {filter === 'all' ? 'All' : 'Uncategorized'}
-                </button>
-              ))}
-            </div>
-          </div>
+        <Card className="p-5">
+          <SectionHeader
+            eyebrow="TRANSACTIONS"
+            title="Recent"
+            right={
+              <div className="flex gap-2">
+                {(['all', 'uncategorized'] as const).map((filter) => (
+                  <button key={filter} onClick={() => setTxFilter(filter)} className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-all ${txFilter === filter ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}>
+                    {filter === 'all' ? 'All' : 'Uncategorized'}
+                  </button>
+                ))}
+              </div>
+            }
+          />
           {displayedTransactions.length === 0 ? (
-            <p className="text-text-muted text-xs">No transactions found</p>
+            <EmptyState title="No transactions found" copy="Try another filter or add a transaction." />
           ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div className="max-h-[32rem] space-y-2 overflow-y-auto">
               {displayedTransactions.slice(0, 30).map((transaction) => (
                 <div
                   key={transaction.id}
@@ -376,13 +387,16 @@ export default function FinancePage() {
                       openEditTransaction(transaction)
                     }
                   }}
-                  className="w-full flex items-center justify-between gap-3 py-2 border-b border-white/[0.04] last:border-0 text-left group"
+                  className="group flex w-full items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:border-white/[0.04] hover:bg-white/[0.02]"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm">{transaction.spending_categories?.icon ?? '💰'}</span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.04] bg-white/[0.02] text-sm">{transaction.spending_categories?.icon ?? '💰'}</span>
                     <div className="min-w-0">
                       <p className="text-sm text-text-primary truncate">{transaction.merchant ?? transaction.note ?? 'Transaction'}</p>
-                      <p className="text-xs text-text-muted">{new Date(transaction.transaction_date).toLocaleDateString('en-IN')}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="text-xs text-text-muted">{new Date(transaction.transaction_date).toLocaleDateString('en-IN')}</p>
+                        <Chip variant="tag">{transaction.spending_categories?.name ?? 'Uncategorized'}</Chip>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -424,7 +438,7 @@ export default function FinancePage() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       <AnimatePresence>

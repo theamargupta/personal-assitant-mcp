@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, type ChangeEvent, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { Card, Chip, DashboardHero, EmptyState, SectionHeader, StatCard } from '@/components/dashboard/kit'
 
 interface Doc {
   id: string
@@ -14,6 +15,7 @@ interface Doc {
   storage_path: string
   tags: string[]
   created_at: string
+  status?: string
 }
 
 interface UploadForm {
@@ -228,91 +230,79 @@ export default function DocumentsPage() {
     )
   }
 
+  const totalSize = docs.reduce((sum, doc) => sum + doc.file_size, 0)
+  const pending = docs.filter((doc) => doc.status && doc.status !== 'ready').length
+
   return (
-    <div className="max-w-5xl">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-[22px] font-bold text-text-primary tracking-[-0.02em]">Documents</h1>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-initial">
+    <div className="space-y-8">
+      <DashboardHero
+        eyebrow="DOCUMENTS"
+        title="Your wallet"
+        subtitle="IDs, PDFs, screenshots, and tagged files laid out like a real document tray."
+        right={<button onClick={() => setShowUpload(true)} className="rounded-full bg-neon px-5 py-3 text-sm font-semibold text-bg-primary transition-transform hover:scale-[1.02]">+ Upload</button>}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Total Documents" value={docs.length} hint="in wallet" accent="neon" />
+        <StatCard label="Pending Extract" value={pending} hint="processing" accent={pending > 0 ? 'orange' : 'muted'} />
+        <StatCard label="Total Size" value={formatSize(totalSize)} hint="stored files" accent="blue" />
+      </div>
+
+      <Card className="p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Search documents..."
+              placeholder="Search documents or tags"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full sm:w-64 pl-9 pr-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06] text-text-primary text-[14px] placeholder:text-text-muted focus:outline-none focus:border-neon/30 focus:ring-1 focus:ring-neon/20"
+              className="w-full rounded-full border border-white/[0.06] bg-white/[0.02] py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:border-neon/30 focus:outline-none"
             />
-            <svg className="absolute left-3 top-[19px] text-text-muted" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="absolute left-4 top-3 text-text-muted" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="6" cy="6" r="5" /><path d="M10 10l3 3" />
             </svg>
-            <p className="text-xs text-text-muted mt-2">For content search, ask Claude</p>
           </div>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="px-4 py-2 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-sm font-semibold transition-all"
-          >
-            Upload
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {filterTabs.map((filter) => (
+              <button key={filter} onClick={() => setTab(filter)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${tab === filter ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}>
+                {filter}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="flex gap-2 mb-6">
-        {filterTabs.map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setTab(filter)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              tab === filter ? 'bg-neon/[0.1] text-neon' : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            {filter}
-          </button>
-        ))}
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-12 text-center">
-          <p className="text-text-muted">No documents found. Upload one to start.</p>
-        </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((doc, i) => (
-            <motion.div
-              key={doc.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.03 }}
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 hover:border-white/[0.12] transition-all group"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-3xl">{typeIcons[doc.doc_type] ?? '📁'}</span>
-                <button
-                  onClick={() => setDeleteDocTarget(doc)}
-                  className="h-8 w-8 rounded-lg bg-red-500/[0.1] text-red-400 border border-red-500/[0.15] hover:bg-red-500/[0.2] transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                  aria-label={`Delete ${doc.name}`}
-                >
-                  🗑
-                </button>
-              </div>
-              <h3 className="font-medium text-text-primary text-sm mb-1 truncate">{doc.name}</h3>
-              {doc.description && <p className="text-xs text-text-muted mb-2 truncate">{doc.description}</p>}
-              <div className="flex flex-wrap gap-1 mb-3">
-                {doc.tags.map((tag) => (
-                  <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-text-muted">{tag}</span>
-                ))}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-text-muted">{formatSize(doc.file_size)}</span>
-                <button
-                  onClick={() => downloadDoc(doc)}
-                  className="text-xs text-neon hover:text-neon-muted opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  Download
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
+      <section>
+        <SectionHeader eyebrow="DOCUMENT GRID" title="Files" />
+        {filtered.length === 0 ? (
+          <EmptyState title="No documents found" copy="Upload a file or change the search/filter to widen the tray." action={<button onClick={() => setShowUpload(true)} className="rounded-full bg-neon px-4 py-2 text-xs font-semibold text-bg-primary">Upload</button>} />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((doc, i) => (
+              <motion.div key={doc.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                <Card hoverable className="group p-5">
+                  <div className="mb-5 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.02] text-2xl">{typeIcons[doc.doc_type] ?? '📁'}</div>
+                    <Chip variant={doc.status === 'pending' ? 'status-pending' : 'status-completed'}>{doc.status ?? 'ready'}</Chip>
+                  </div>
+                  <h3 className="truncate text-sm font-semibold text-text-primary">{doc.name}</h3>
+                  {doc.description && <p className="mt-2 line-clamp-2 text-xs leading-5 text-text-muted">{doc.description}</p>}
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {doc.tags.slice(0, 4).map((tag) => <Chip key={tag} variant="tag">#{tag}</Chip>)}
+                  </div>
+                  <div className="mt-5 flex items-center justify-between border-t border-white/[0.04] pt-4">
+                    <span className="text-xs text-text-muted">{formatSize(doc.file_size)}</span>
+                    <div className="flex gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                      <button onClick={() => downloadDoc(doc)} className="rounded-full border border-white/[0.06] px-3 py-1.5 text-xs text-text-secondary hover:text-neon">Download</button>
+                      <button onClick={() => setDeleteDocTarget(doc)} className="rounded-full border border-red-500/[0.15] bg-red-500/[0.08] px-3 py-1.5 text-xs text-red-300">Delete</button>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <AnimatePresence>
         {showUpload && (

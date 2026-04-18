@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { Card, Chip, DashboardHero, EmptyState, ProgressBar, SectionHeader, StatCard } from '@/components/dashboard/kit'
 
 interface Habit {
   id: string
@@ -33,14 +34,9 @@ interface HabitForm {
 }
 
 const presetColors = ['#c8ff00', '#fafafa', '#22c55e', '#38bdf8', '#f97316', '#ef4444']
-const emptyHabitForm: HabitForm = {
-  name: '',
-  frequency: 'daily',
-  description: '',
-  color: '#c8ff00',
-  reminder_time: '',
-}
-const inputClass = 'w-full px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06] text-text-primary text-[14px] placeholder:text-text-muted focus:outline-none focus:border-neon/30 focus:ring-1 focus:ring-neon/20'
+const emptyHabitForm: HabitForm = { name: '', frequency: 'daily', description: '', color: '#c8ff00', reminder_time: '' }
+const inputClass = 'w-full rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[14px] text-text-primary placeholder:text-text-muted focus:border-neon/30 focus:outline-none focus:ring-1 focus:ring-neon/20'
+const frequencies = ['all', 'daily', 'weekly', 'monthly'] as const
 
 function isoDate(date: Date) {
   return date.toISOString().split('T')[0]
@@ -61,12 +57,8 @@ function getBestStreak(dates: string[]) {
   let previous: string | null = null
 
   uniqueDates.forEach((date) => {
-    if (!previous) {
-      current = 1
-    } else {
-      const diffDays = (new Date(date).getTime() - new Date(previous).getTime()) / (1000 * 60 * 60 * 24)
-      current = diffDays === 1 ? current + 1 : 1
-    }
+    if (!previous) current = 1
+    else current = (new Date(date).getTime() - new Date(previous).getTime()) / (1000 * 60 * 60 * 24) === 1 ? current + 1 : 1
     best = Math.max(best, current)
     previous = date
   })
@@ -89,6 +81,7 @@ function getCurrentStreak(dates: string[], loggedToday: boolean) {
 
 export default function HabitsPage() {
   const [habits, setHabits] = useState<HabitWithStats[]>([])
+  const [filter, setFilter] = useState<(typeof frequencies)[number]>('all')
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const [showHabitModal, setShowHabitModal] = useState(false)
@@ -105,10 +98,7 @@ export default function HabitsPage() {
   const loadHabits = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) { setLoading(false); return }
 
     const { data: habitsData, error } = await supabase
       .from('habits')
@@ -117,11 +107,7 @@ export default function HabitsPage() {
       .eq('archived', false)
       .order('created_at', { ascending: false })
 
-    if (error || !habitsData) {
-      setHabits([])
-      setLoading(false)
-      return
-    }
+    if (error || !habitsData) { setHabits([]); setLoading(false); return }
 
     const today = isoDate(new Date())
     const thirtyDaysAgo = new Date()
@@ -139,12 +125,11 @@ export default function HabitsPage() {
       const allDates = [...new Set((logs ?? []).map((log) => log.logged_date as string))]
       const recentDates = allDates.filter((date) => date >= thirtyDaysAgoIso)
       const loggedToday = allDates.includes(today)
-      const completionPct = Math.round((recentDates.length / 30) * 100)
 
       return {
         ...habit,
         currentStreak: getCurrentStreak(allDates, loggedToday),
-        completionPct,
+        completionPct: Math.round((recentDates.length / 30) * 100),
         bestStreak: getBestStreak(allDates),
         lastLogged: allDates[0] ?? null,
         loggedToday,
@@ -197,10 +182,7 @@ export default function HabitsPage() {
       ? await supabase.from('habits').update(payload).eq('id', editingHabit.id).eq('user_id', user.id)
       : await supabase.from('habits').insert({ ...payload, user_id: user.id })
 
-    if (error) {
-      showToast(error.message)
-      return
-    }
+    if (error) { showToast(error.message); return }
 
     setShowHabitModal(false)
     setEditingHabit(null)
@@ -214,17 +196,8 @@ export default function HabitsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const today = isoDate(new Date())
-    const { error } = await supabase.from('habit_logs').insert({
-      habit_id: habitId,
-      user_id: user.id,
-      logged_date: today,
-    })
-
-    if (error) {
-      showToast(error.message.includes('duplicate') ? 'Already logged today' : error.message)
-      return
-    }
+    const { error } = await supabase.from('habit_logs').insert({ habit_id: habitId, user_id: user.id, logged_date: isoDate(new Date()) })
+    if (error) { showToast(error.message.includes('duplicate') ? 'Already logged today' : error.message); return }
 
     await loadHabits()
     showToast('Logged')
@@ -235,16 +208,8 @@ export default function HabitsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { error } = await supabase
-      .from('habits')
-      .update({ archived: true, updated_at: new Date().toISOString() })
-      .eq('id', habitId)
-      .eq('user_id', user.id)
-
-    if (error) {
-      showToast(error.message)
-      return
-    }
+    const { error } = await supabase.from('habits').update({ archived: true, updated_at: new Date().toISOString() }).eq('id', habitId).eq('user_id', user.id)
+    if (error) { showToast(error.message); return }
 
     setConfirmArchive(null)
     await loadHabits()
@@ -252,275 +217,192 @@ export default function HabitsPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-neon border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-neon border-t-transparent" /></div>
   }
 
   const heatmapDays = getLastThirtyDays()
+  const filteredHabits = filter === 'all' ? habits : habits.filter((habit) => habit.frequency === filter)
+  const longest = habits.reduce((max, habit) => Math.max(max, habit.currentStreak), 0)
+  const completions = habits.reduce((sum, habit) => sum + habit.recentDates.slice(-7).length, 0)
+  const onTrack = habits.length === 0 ? 0 : Math.round(habits.reduce((sum, habit) => sum + habit.completionPct, 0) / habits.length)
 
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-[22px] font-bold text-text-primary tracking-[-0.02em]">Habits</h1>
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-sm font-semibold transition-all"
-        >
-          New Habit
-        </button>
+    <div className="space-y-8">
+      <DashboardHero
+        eyebrow="HABITS"
+        title="Your rhythm"
+        subtitle="Colored dots, quick logs, streaks that feel alive. Aaj ka ritual bas ek tap door."
+        right={<button onClick={openCreateModal} className="rounded-full bg-neon px-5 py-3 text-sm font-semibold text-bg-primary transition-transform hover:scale-[1.02]">+ New habit</button>}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active Habits" value={habits.length} hint="not archived" accent="neon" />
+        <StatCard label="Longest Current" value={`${longest}d`} hint="best streak right now" accent="orange" />
+        <StatCard label="This Week" value={completions} hint="logs in last 7 entries" accent="blue" />
+        <StatCard label="On Track" value={`${onTrack}%`} hint="30-day average" accent="muted" />
       </div>
 
-      {habits.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-12 text-center">
-          <p className="text-text-muted">No habits yet. Create one to start tracking.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {habits.map((habit, i) => {
-            const completionText = `${habit.recentDates.length}/30 days (${habit.completionPct}%)`
-            return (
-              <motion.div
-                key={habit.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5"
-              >
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: habit.color }} />
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-text-primary truncate">{habit.name}</h3>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-xs text-text-muted capitalize">{habit.frequency}</span>
-                        {habit.reminder_time && <span className="text-xs text-text-muted">{habit.reminder_time}</span>}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <span className="text-xs font-medium bg-neon/[0.08] text-neon px-2.5 py-1 rounded-full">
-                      {habit.currentStreak} day streak
-                    </span>
-                    {!habit.loggedToday ? (
-                      <button
-                        onClick={() => logToday(habit.id)}
-                        className="px-3 py-1.5 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-xs font-semibold transition-all"
-                      >
-                        Log Today
-                      </button>
-                    ) : (
-                      <span className="text-xs bg-neon/[0.08] text-neon border border-neon/[0.12] px-2.5 py-1 rounded-full">
-                        Done
-                      </span>
-                    )}
-                    <button
-                      onClick={() => setAnalyticsOpen(analyticsOpen === habit.id ? null : habit.id)}
-                      className="px-3 py-1.5 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary hover:border-white/[0.12] text-xs transition-all"
-                    >
-                      Analytics
-                    </button>
-                    <button
-                      onClick={() => openEditModal(habit)}
-                      aria-label={`Edit ${habit.name}`}
-                      className="h-8 w-8 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary hover:border-white/[0.12] transition-all"
-                    >
-                      ✎
-                    </button>
-                    <button
-                      onClick={() => setConfirmArchive(habit.id)}
-                      aria-label={`Archive ${habit.name}`}
-                      className="h-8 w-8 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary hover:border-white/[0.12] transition-all"
-                    >
-                      📦
-                    </button>
-                  </div>
-                </div>
-
-                {habit.description && <p className="text-sm text-text-muted mb-4">{habit.description}</p>}
-
-                {confirmArchive === habit.id && (
-                  <div className="mb-4 rounded-xl border border-white/[0.04] bg-white/[0.01] p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <span className="text-sm text-text-secondary">Archive this habit?</span>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => archiveHabit(habit.id)}
-                        className="px-3 py-1.5 rounded-lg bg-red-500/[0.1] text-red-400 border border-red-500/[0.15] hover:bg-red-500/[0.2] text-xs transition-all"
-                      >
-                        Archive
-                      </button>
-                      <button
-                        onClick={() => setConfirmArchive(null)}
-                        className="px-3 py-1.5 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary text-xs transition-all"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-text-muted">
-                    <span>30-day completion</span>
-                    <span>{habit.completionPct}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-white/[0.04]">
-                    <motion.div
-                      className="h-full rounded-full bg-neon"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${habit.completionPct}%` }}
-                      transition={{ duration: 0.8, ease: 'easeOut' }}
-                    />
-                  </div>
-                </div>
-
-                <AnimatePresence>
-                  {analyticsOpen === habit.id && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="mt-5 pt-5 border-t border-white/[0.04]">
-                        <p className="text-[11px] font-semibold text-neon uppercase tracking-[0.15em] mb-3">Analytics</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                          <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
-                            <p className="text-xs text-text-muted">Completion</p>
-                            <p className="text-sm font-semibold text-text-primary mt-1">{completionText}</p>
-                          </div>
-                          <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
-                            <p className="text-xs text-text-muted">Current streak</p>
-                            <p className="text-sm font-semibold text-neon mt-1">{habit.currentStreak} days</p>
-                          </div>
-                          <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
-                            <p className="text-xs text-text-muted">Best streak</p>
-                            <p className="text-sm font-semibold text-text-primary mt-1">{habit.bestStreak} days</p>
-                          </div>
-                          <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
-                            <p className="text-xs text-text-muted">Last logged</p>
-                            <p className="text-sm font-semibold text-text-primary mt-1">{habit.lastLogged ?? 'Never'}</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-10 gap-1">
-                          {heatmapDays.map((day) => {
-                            const logged = habit.recentDates.includes(day)
-                            return (
-                              <div
-                                key={day}
-                                title={day}
-                                className={`aspect-square rounded-[4px] border ${
-                                  logged
-                                    ? 'bg-neon border-neon'
-                                    : 'bg-white/[0.04] border-white/[0.04]'
-                                }`}
-                              />
-                            )
-                          })}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
-
-      <AnimatePresence>
-        {showHabitModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowHabitModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="rounded-2xl border border-white/[0.06] bg-bg-surface p-6 w-full max-w-md"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-lg font-semibold text-text-primary mb-4">
-                {editingHabit ? 'Edit Habit' : 'New Habit'}
-              </h2>
-              <form onSubmit={saveHabit} className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Habit name"
-                  value={habitForm.name}
-                  onChange={(e) => setHabitForm({ ...habitForm, name: e.target.value })}
-                  required
-                  className={inputClass}
-                />
-                <select
-                  value={habitForm.frequency}
-                  onChange={(e) => setHabitForm({ ...habitForm, frequency: e.target.value as HabitForm['frequency'] })}
-                  className={inputClass}
+      <section>
+        <SectionHeader
+          eyebrow="FILTERS"
+          title="Ritual board"
+          right={
+            <div className="flex flex-wrap gap-2">
+              {frequencies.map((frequency) => (
+                <button
+                  key={frequency}
+                  onClick={() => setFilter(frequency)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-all ${filter === frequency ? 'border-neon/20 bg-neon/[0.08] text-neon' : 'border-white/[0.05] text-text-muted hover:text-text-primary'}`}
                 >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-                <textarea
-                  placeholder="Description (optional)"
-                  value={habitForm.description}
-                  onChange={(e) => setHabitForm({ ...habitForm, description: e.target.value })}
-                  rows={3}
-                  className={`${inputClass} resize-none`}
-                />
-                <input
-                  type="time"
-                  value={habitForm.reminder_time}
-                  onChange={(e) => setHabitForm({ ...habitForm, reminder_time: e.target.value })}
-                  className={inputClass}
-                />
-                <div>
-                  <p className="text-xs text-text-muted mb-2">Color</p>
-                  <div className="flex gap-2">
-                    {presetColors.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setHabitForm({ ...habitForm, color })}
-                        className={`h-8 w-8 rounded-full border transition-all ${
-                          habitForm.color === color ? 'border-neon ring-2 ring-neon/20' : 'border-white/[0.08]'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        aria-label={`Set color ${color}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <button type="submit" className="flex-1 py-2 rounded-lg bg-neon text-bg-primary hover:bg-neon-muted text-sm font-semibold transition-all">
-                    {editingHabit ? 'Save' : 'Create'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowHabitModal(false)}
-                    className="px-4 py-2 rounded-lg border border-white/[0.08] text-text-secondary hover:text-text-primary text-sm transition-all"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  {frequency}
+                </button>
+              ))}
+            </div>
+          }
+        />
 
-      {toast && (
-        <div className="fixed bottom-6 right-6 bg-bg-surface border border-white/[0.06] text-text-primary px-4 py-2.5 rounded-xl text-sm shadow-lg">
-          {toast}
-        </div>
-      )}
+        {filteredHabits.length === 0 ? (
+          <EmptyState title="No habits in this view" copy="Create a ritual or switch filters to see your active rhythm." action={<button onClick={openCreateModal} className="rounded-full bg-neon px-4 py-2 text-xs font-semibold text-bg-primary">Create habit</button>} />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {filteredHabits.map((habit, index) => {
+              const completionText = `${habit.recentDates.length}/30 days`
+              return (
+                <motion.div key={habit.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
+                  <Card hoverable className="p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: habit.color }} />
+                          <h3 className="truncate text-lg font-semibold tracking-[-0.02em] text-text-primary">{habit.name}</h3>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Chip variant="tag">{habit.frequency}</Chip>
+                          {habit.reminder_time && <Chip variant="tag">{habit.reminder_time}</Chip>}
+                          <Chip variant={habit.loggedToday ? 'status-completed' : 'status-pending'}>{habit.loggedToday ? 'done today' : 'not logged'}</Chip>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {!habit.loggedToday ? (
+                          <button onClick={() => logToday(habit.id)} className="rounded-full bg-neon px-4 py-2 text-xs font-semibold text-bg-primary">Log today</button>
+                        ) : (
+                          <span className="rounded-full border border-neon/15 bg-neon/[0.08] px-4 py-2 text-xs font-medium text-neon">Logged</span>
+                        )}
+                        <button onClick={() => setAnalyticsOpen(analyticsOpen === habit.id ? null : habit.id)} className="rounded-full border border-white/[0.06] px-3 py-2 text-xs text-text-secondary hover:text-text-primary">Analytics</button>
+                        <button onClick={() => openEditModal(habit)} aria-label={`Edit ${habit.name}`} className="h-9 w-9 rounded-full border border-white/[0.06] text-text-secondary hover:text-text-primary">✎</button>
+                        <button onClick={() => setConfirmArchive(habit.id)} aria-label={`Archive ${habit.name}`} className="h-9 w-9 rounded-full border border-white/[0.06] text-text-secondary hover:text-text-primary">□</button>
+                      </div>
+                    </div>
+
+                    {habit.description && <p className="mt-4 text-sm leading-6 text-text-muted">{habit.description}</p>}
+                    {confirmArchive === habit.id && (
+                      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-red-400/10 bg-red-500/[0.05] p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span className="text-sm text-text-secondary">Archive this habit?</span>
+                        <div className="flex gap-2">
+                          <button onClick={() => archiveHabit(habit.id)} className="rounded-full bg-red-500/[0.12] px-3 py-1.5 text-xs text-red-300">Archive</button>
+                          <button onClick={() => setConfirmArchive(null)} className="rounded-full border border-white/[0.06] px-3 py-1.5 text-xs text-text-secondary">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+
+                    <ProgressBar className="mt-5" value={habit.completionPct} label="30-day completion" />
+
+                    <AnimatePresence>
+                      {analyticsOpen === habit.id && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                          <div className="mt-5 border-t border-white/[0.04] pt-5">
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                              <MiniMetric label="Completion" value={completionText} />
+                              <MiniMetric label="Current" value={`${habit.currentStreak}d`} neon />
+                              <MiniMetric label="Best" value={`${habit.bestStreak}d`} />
+                              <MiniMetric label="Last" value={habit.lastLogged ?? 'Never'} />
+                            </div>
+                            <div className="mt-4 grid grid-cols-10 gap-1">
+                              {heatmapDays.map((day) => (
+                                <div key={day} title={day} className={`aspect-square rounded-[4px] border ${habit.recentDates.includes(day) ? 'border-neon bg-neon' : 'border-white/[0.04] bg-white/[0.035]'}`} />
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </Card>
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      <HabitModal
+        open={showHabitModal}
+        editing={Boolean(editingHabit)}
+        form={habitForm}
+        setForm={setHabitForm}
+        onClose={() => setShowHabitModal(false)}
+        onSubmit={saveHabit}
+      />
+
+      {toast && <div className="fixed bottom-6 right-6 rounded-xl border border-white/[0.06] bg-bg-surface px-4 py-2.5 text-sm text-text-primary shadow-lg">{toast}</div>}
     </div>
+  )
+}
+
+function MiniMetric({ label, value, neon = false }: { label: string; value: string; neon?: boolean }) {
+  return (
+    <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+      <p className="text-xs text-text-muted">{label}</p>
+      <p className={`mt-1 truncate text-sm font-semibold ${neon ? 'text-neon' : 'text-text-primary'}`}>{value}</p>
+    </div>
+  )
+}
+
+function HabitModal({
+  open,
+  editing,
+  form,
+  setForm,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean
+  editing: boolean
+  form: HabitForm
+  setForm: (form: HabitForm) => void
+  onClose: () => void
+  onSubmit: (event: FormEvent) => void
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="w-full max-w-md rounded-2xl border border-white/[0.06] bg-bg-surface p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">{editing ? 'Edit Habit' : 'New Habit'}</h2>
+            <form onSubmit={onSubmit} className="space-y-3">
+              <input type="text" placeholder="Habit name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className={inputClass} />
+              <select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value as HabitForm['frequency'] })} className={inputClass}>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+              <textarea placeholder="Description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className={`${inputClass} resize-none`} />
+              <input type="time" value={form.reminder_time} onChange={(e) => setForm({ ...form, reminder_time: e.target.value })} className={inputClass} />
+              <div>
+                <p className="mb-2 text-xs text-text-muted">Color</p>
+                <div className="flex gap-2">
+                  {presetColors.map((color) => (
+                    <button key={color} type="button" onClick={() => setForm({ ...form, color })} className={`h-8 w-8 rounded-full border transition-all ${form.color === color ? 'border-neon ring-2 ring-neon/20' : 'border-white/[0.08]'}`} style={{ backgroundColor: color }} aria-label={`Set color ${color}`} />
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="submit" className="flex-1 rounded-full bg-neon py-2 text-sm font-semibold text-bg-primary">{editing ? 'Save' : 'Create'}</button>
+                <button type="button" onClick={onClose} className="rounded-full border border-white/[0.08] px-4 py-2 text-sm text-text-secondary">Cancel</button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

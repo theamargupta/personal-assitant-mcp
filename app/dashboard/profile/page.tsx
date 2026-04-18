@@ -1,8 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AvatarUpload } from '@/components/dashboard/AvatarUpload'
+import { Card, DashboardHero, SectionHeader } from '@/components/dashboard/kit'
+
+const MCP_URL = 'https://sathi.devfrend.com/api/mcp'
 
 interface ProfileMetadata {
   full_name?: string
@@ -12,10 +16,12 @@ interface ProfileMetadata {
 }
 
 export default function ProfilePage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [userId, setUserId] = useState<string>('')
   const [email, setEmail] = useState('')
+  const [createdAt, setCreatedAt] = useState('')
   const [fullName, setFullName] = useState('')
   const [firstName, setFirstName] = useState('')
   const [bio, setBio] = useState('')
@@ -30,6 +36,7 @@ export default function ProfilePage() {
       const meta = (user.user_metadata || {}) as ProfileMetadata
       setUserId(user.id)
       setEmail(user.email || '')
+      setCreatedAt(user.created_at || '')
       setFullName(meta.full_name || '')
       setFirstName(meta.first_name || '')
       setBio(meta.bio || '')
@@ -66,6 +73,18 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleCopyMcp() {
+    await navigator.clipboard.writeText(MCP_URL)
+    setToast({ kind: 'ok', msg: 'MCP URL copied' })
+    setTimeout(() => setToast(null), 2000)
+  }
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   if (loading) {
     return <div className="max-w-2xl text-text-muted text-sm">Loading profile…</div>
   }
@@ -73,11 +92,8 @@ export default function ProfilePage() {
   const initial = (firstName || fullName || email).slice(0, 1).toUpperCase()
 
   return (
-    <div className="max-w-2xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Profile</h1>
-        <p className="text-sm text-text-muted mt-1">How you show up in the app.</p>
-      </div>
+    <div className="space-y-8">
+      <DashboardHero eyebrow="ACCOUNT" title="Profile" subtitle="Your identity, assistant greeting, and MCP connection details in one place." />
 
       {toast && (
         <div
@@ -91,108 +107,75 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6">
-        <div className="rounded-xl border border-white/6 bg-white/2 p-5 space-y-5">
-          <div>
-            <p className="text-sm text-text-primary font-medium">
-              {fullName || email.split('@')[0] || 'Unnamed'}
-            </p>
-            <p className="text-xs text-text-muted mt-0.5">{email}</p>
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <Card className="p-5">
+          <SectionHeader eyebrow="IDENTITY" title="How Sathi sees you" />
+          <div className="space-y-5">
+            <div>
+              <p className="text-lg font-semibold tracking-[-0.02em] text-text-primary">{fullName || email.split('@')[0] || 'Unnamed'}</p>
+              <p className="mt-1 text-sm text-text-muted">{email}</p>
+              {createdAt && <p className="mt-1 text-xs text-text-muted">Joined {new Date(createdAt).toLocaleDateString('en-IN')}</p>}
+            </div>
+            {userId && <AvatarUpload userId={userId} initial={initial} initialUrl={avatarUrl} onUploaded={setAvatarUrl} />}
           </div>
-          {userId && (
-            <AvatarUpload
-              userId={userId}
-              initial={initial}
-              initialUrl={avatarUrl}
-              onUploaded={setAvatarUrl}
-            />
-          )}
+        </Card>
+
+        <form onSubmit={handleSave} className="space-y-5">
+          <Card className="space-y-5 p-5">
+            <SectionHeader eyebrow="DETAILS" title="Profile fields" />
+            <Field label="First name" hint="Used by the assistant to address you.">
+              <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="e.g. Amar" maxLength={50} className="profile-input" />
+            </Field>
+            <Field label="Full name" hint="Displayed on your profile.">
+              <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Amar Gupta" maxLength={100} className="profile-input" />
+            </Field>
+            <Field label="Bio" hint="A one-line description.">
+              <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Founder. Operator. Permanent learner." maxLength={280} rows={3} className="profile-input resize-none" />
+              <p className="mt-1 text-[11px] text-text-muted">{bio.length}/280</p>
+            </Field>
+            <Field label="Avatar URL" hint="Auto-filled when you upload a photo above.">
+              <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://..." className="profile-input" />
+            </Field>
+            <div className="flex justify-end pt-2">
+              <button type="submit" disabled={saving} className="rounded-full bg-neon px-5 py-2.5 text-sm font-semibold text-bg-primary transition-opacity disabled:opacity-60">
+                {saving ? 'Saving...' : 'Save changes'}
+              </button>
+            </div>
+          </Card>
+        </form>
+      </div>
+
+      <Card className="p-5">
+        <SectionHeader eyebrow="MCP" title="Connection info" />
+        <div className="flex flex-col gap-3 rounded-2xl border border-neon/[0.12] bg-neon/[0.025] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <code className="overflow-x-auto whitespace-nowrap font-mono text-sm text-text-primary">{MCP_URL}</code>
+          <button type="button" onClick={handleCopyMcp} className="rounded-full border border-white/[0.08] px-4 py-2 text-xs font-medium text-text-primary hover:border-neon/30 hover:text-neon">Copy</button>
         </div>
+        <p className="mt-4 text-sm text-text-muted">Connected clients are authorized through OAuth when you add this MCP server in Claude, ChatGPT, or a local client.</p>
+      </Card>
 
-        <Field label="First name" hint="Used by the assistant to address you.">
-          <input
-            type="text"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            placeholder="e.g. Amar"
-            maxLength={50}
-            className="input"
-          />
-        </Field>
-
-        <Field label="Full name" hint="Displayed on your profile.">
-          <input
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="e.g. Amar Gupta"
-            maxLength={100}
-            className="input"
-          />
-        </Field>
-
-        <Field label="Bio" hint="A one-line description (optional).">
-          <textarea
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="Founder. Operator. Permanent learner."
-            maxLength={280}
-            rows={3}
-            className="input resize-none"
-          />
-          <p className="text-[11px] text-text-muted mt-1">{bio.length}/280</p>
-        </Field>
-
-        <Field
-          label="Avatar URL"
-          hint="Auto-filled when you upload a photo above. You can also paste a URL directly."
-        >
-          <input
-            type="url"
-            value={avatarUrl}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            placeholder="https://…"
-            className="input"
-          />
-        </Field>
-
-        <div className="flex justify-end pt-2">
-          <button type="submit" disabled={saving} className="btn-primary">
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
-        </div>
-      </form>
+      <Card className="border-red-500/[0.08] p-5">
+        <SectionHeader eyebrow="DANGER ZONE" title="Session" />
+        <button type="button" onClick={handleSignOut} className="rounded-full border border-red-500/[0.2] bg-red-500/[0.08] px-5 py-2.5 text-sm font-medium text-red-300 hover:bg-red-500/[0.14]">
+          Sign out
+        </button>
+      </Card>
 
       <style jsx>{`
-        :global(.input) {
+        :global(.profile-input) {
           width: 100%;
           background: rgba(255, 255, 255, 0.02);
           border: 1px solid rgba(255, 255, 255, 0.06);
           color: var(--color-text-primary, #fafafa);
-          border-radius: 10px;
+          border-radius: 14px;
           padding: 10px 14px;
           font-size: 14px;
           outline: none;
-          transition: border-color 0.15s;
+          transition: border-color 0.15s, box-shadow 0.15s;
         }
-        :global(.input:focus) {
-          border-color: rgba(139, 92, 246, 0.6);
-        }
-        :global(.btn-primary) {
-          padding: 10px 20px;
-          border-radius: 10px;
-          background: #8b5cf6;
-          color: #fafafa;
-          font-size: 14px;
-          font-weight: 600;
-          transition: opacity 0.15s;
-        }
-        :global(.btn-primary:disabled) {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        :global(.btn-primary:hover:not(:disabled)) {
-          background: #7c3aed;
+        :global(.profile-input:focus) {
+          border-color: rgba(200, 255, 0, 0.32);
+          box-shadow: 0 0 0 1px rgba(200, 255, 0, 0.08);
         }
       `}</style>
     </div>

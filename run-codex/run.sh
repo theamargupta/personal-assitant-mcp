@@ -1,7 +1,7 @@
 #!/bin/bash
 cd "/Volumes/maersk/amargupta/Documents/Latest Projects/Portfolio Project/Sathi/Sathi Personal Assistant MCP and Web App"
 {
-  cat run-codex/PLAN-18-Apr-2026_05-33PM.md
+  cat run-codex/PLAN-18-Apr-2026_05-52PM.md
   echo ""
   echo "---"
   echo "You have full approval to implement everything above. Do NOT ask for approval. Do NOT propose a design. Just implement all files immediately and completely."
@@ -13,4 +13,4 @@ cd "/Volumes/maersk/amargupta/Documents/Latest Projects/Portfolio Project/Sathi/
   --skip-git-repo-check \
   -
 echo ""
-echo "--- CODEX DONE: Sathi landing page rewrite ---"
+echo "--- CODEX DONE: Landing fixes + dashboard redesign ---"

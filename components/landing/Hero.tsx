@@ -128,7 +128,7 @@ export function Hero() {
         <motion.div variants={fadeUp} className="mb-8">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.25em] text-text-secondary">
             <span className="h-1.5 w-1.5 rounded-full bg-neon animate-pulse" />
-            MCP server &middot; Web dashboard &middot; iOS app
+            MCP server &middot; Web dashboard &middot; Android app
           </span>
         </motion.div>
 
@@ -152,7 +152,7 @@ export function Hero() {
         >
           Sathi is an MCP server that plugs your habits, tasks, money, documents,
           goals, and memory into Claude and ChatGPT. Ask &quot;mera April review do&quot; — get
-          back a live dashboard, not a paragraph. Same data syncs to the web and your iOS app.
+          back a live dashboard, not a paragraph. Same data syncs to the web and your Android app.
         </motion.p>
 
         {/* CTAs */}
