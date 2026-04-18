@@ -118,10 +118,10 @@ export function registerMemoryTools(server: McpServer) {
     server,
     'search_memory',
     {
-      description: 'Semantic + keyword hybrid search across all memories. Returns results with score breakdown and stale hints.',
+      description: 'Semantic + keyword hybrid search. Defaults to the "personal" space — pass space="all" to search across work/projects/freelance too, or a specific slug to scope. Use only with a SPECIFIC query; for unscoped browsing use list_memories.',
       inputSchema: {
         query: z.string().min(1).max(500).describe('Natural language search query'),
-        space: z.string().optional().describe('Filter by space slug'),
+        space: z.string().default('personal').describe('Space slug to filter by. Default "personal". Pass "all" to search across every space.'),
         category: MemoryCategoryEnum.optional().describe('Optional category filter'),
         project: z.string().optional().describe('Optional project filter'),
         limit: z.number().int().min(1).max(20).default(5).describe('Max results (default: 5)'),
@@ -136,7 +136,7 @@ export function registerMemoryTools(server: McpServer) {
         const results = await searchMemories({
           userId,
           query,
-          spaceSlug: space,
+          spaceSlug: space === 'all' ? undefined : space,
           category,
           project,
           limit,
@@ -177,9 +177,9 @@ export function registerMemoryTools(server: McpServer) {
 
   server.tool(
     'list_memories',
-    'Browse memories by category, tags, project, or date range.',
+    'Fetch/browse memories, sorted by most recent. Use this for "show/fetch my memories" requests (not search_memory). Defaults to the "personal" space — work/project items are excluded by default. Pass space="all" to include every space, or a specific slug to scope.',
     {
-      space: z.string().optional().describe('Filter by space slug'),
+      space: z.string().default('personal').describe('Space slug to filter by. Default "personal". Pass "all" to list across every space.'),
       category: MemoryCategoryEnum.optional().describe('Filter by category'),
       project: z.string().optional().describe('Filter by project'),
       tag: z.string().optional().describe('Filter by tag'),
@@ -193,7 +193,7 @@ export function registerMemoryTools(server: McpServer) {
       try {
         const memories = await listMemories({
           userId,
-          spaceSlug: space,
+          spaceSlug: space === 'all' ? undefined : space,
           category,
           project,
           tag,

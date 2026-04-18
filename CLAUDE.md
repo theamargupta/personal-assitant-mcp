@@ -152,8 +152,8 @@ app/api/finance/
 | Tool | Description |
 |------|-------------|
 | `save_memory` | Store a memory; optional `force` to bypass duplicate check. Near-duplicates (≥0.9 similarity via `pa_match_memories`) return `status: duplicate_candidate` with similar rows instead of inserting. ExtApps widget: `memory-search.html`. |
-| `search_memory` | Hybrid search: `pa_hybrid_search` combines vector similarity and full-text (`search_vector`). Each hit includes `semantic_score`, `keyword_score`, `final_score`, and optional `stale_hint`. Widget: `memory-search.html`. |
-| `list_memories` | Browse with filters; each row can include `stale_hint` (server-side via `computeStaleHint`). |
+| `search_memory` | Hybrid search: `pa_hybrid_search` combines vector similarity and full-text (`search_vector`). **Defaults to `space: 'personal'`** — pass `space: 'all'` to span every space, or a specific slug to scope. Each hit includes `semantic_score`, `keyword_score`, `final_score`, and optional `stale_hint`. Widget: `memory-search.html`. |
+| `list_memories` | Fetch/browse, sorted by most recent. **Defaults to `space: 'personal'`** (`space: 'all'` to span every space). Canonical tool for "show/fetch my memories" — prefer over `search_memory` when there's no specific query. Each row can include `stale_hint`. |
 | `get_memory` | Get by ID |
 | `update_memory` | PATCH semantics update |
 | `delete_memory` | Soft delete (is_active=false, invalid_at=now) |
