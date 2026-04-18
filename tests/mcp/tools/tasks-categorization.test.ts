@@ -42,7 +42,7 @@ const server = new McpServer({ name: 'test', version: '0.0.0' })
 registerTaskTools(server)
 
 const authInfo = { extra: { userId: 'user-1' } }
-const methods = ['select', 'insert', 'update', 'delete', 'eq', 'neq', 'gte', 'lte', 'order', 'limit', 'range', 'single', 'maybeSingle']
+const methods = ['select', 'insert', 'update', 'delete', 'eq', 'neq', 'gte', 'lte', 'is', 'in', 'order', 'limit', 'range', 'single', 'maybeSingle']
 
 function createQuery(result: QueryResult = { data: null, error: null }): QueryChain {
   const chain = {} as QueryChain

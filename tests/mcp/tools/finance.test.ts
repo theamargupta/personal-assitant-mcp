@@ -95,7 +95,24 @@ const mocks = vi.hoisted(() => {
       updated_at: '2025-01-16T06:30:00.000Z',
     })),
     deleteTransaction: vi.fn(async () => undefined),
+    getTransaction: vi.fn(async (_userId: string, _transactionId: string) => null as unknown),
     ensurePresetCategories: vi.fn(),
+    listCategories: vi.fn(async () => [] as Array<{ id: string; name: string; icon: string; is_preset: boolean; created_at: string }>),
+    createCategory: vi.fn(async (_userId: string, name: string, icon: string) => ({
+      id: 'cat-new',
+      name,
+      icon,
+      is_preset: false,
+      created_at: '2026-04-15T06:30:00.000Z',
+    })),
+    updateCategory: vi.fn(async (_userId: string, categoryId: string, updates: { name?: string; icon?: string }) => ({
+      id: categoryId,
+      name: updates.name ?? 'Original',
+      icon: updates.icon ?? '🛒',
+      is_preset: false,
+      created_at: '2026-04-15T06:30:00.000Z',
+    })),
+    deleteCategory: vi.fn(async () => undefined),
     registeredTools: {} as Record<string, { handler: Function }>,
   }
 })
@@ -110,10 +127,15 @@ vi.mock('@/lib/finance/transactions', () => ({
   getSpendingSummary: mocks.getSpendingSummary,
   updateTransaction: mocks.updateTransaction,
   deleteTransaction: mocks.deleteTransaction,
+  getTransaction: mocks.getTransaction,
 }))
 
 vi.mock('@/lib/finance/categories', () => ({
   ensurePresetCategories: mocks.ensurePresetCategories,
+  listCategories: mocks.listCategories,
+  createCategory: mocks.createCategory,
+  updateCategory: mocks.updateCategory,
+  deleteCategory: mocks.deleteCategory,
 }))
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
@@ -534,5 +556,232 @@ describe('delete_transaction', () => {
 
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toBe('Error: Transaction not found')
+  })
+})
+
+describe('get_transaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['get_transaction'].handler(
+      { transaction_id: 'tx-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('returns error when transaction not found', async () => {
+    mocks.getTransaction.mockResolvedValue(null)
+
+    const result = await mocks.registeredTools['get_transaction'].handler(
+      { transaction_id: '00000000-0000-0000-0000-000000000000' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Transaction not found')
+  })
+
+  it('returns transaction with category', async () => {
+    mocks.getTransaction.mockResolvedValue({
+      id: 'tx-1',
+      amount: 200,
+      merchant: 'Chai Point',
+      source_app: 'manual',
+      note: 'Morning chai',
+      category_id: 'cat-food',
+      is_auto_detected: false,
+      raw_sms: null,
+      transaction_date: '2026-04-15T06:30:00.000Z',
+      created_at: '2026-04-15T06:30:00.000Z',
+      updated_at: '2026-04-15T06:30:00.000Z',
+      spending_categories: { name: 'Food', icon: '🍕' },
+    })
+
+    const result = await mocks.registeredTools['get_transaction'].handler(
+      { transaction_id: 'tx-1' },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(mocks.getTransaction).toHaveBeenCalledWith('user-1', 'tx-1')
+    expect(parsed.transaction_id).toBe('tx-1')
+    expect(parsed.amount).toBe(200)
+    expect(parsed.category).toBe('Food')
+    expect(parsed.icon).toBe('🍕')
+  })
+
+  it('returns null category when uncategorized', async () => {
+    mocks.getTransaction.mockResolvedValue({
+      id: 'tx-2',
+      amount: 500,
+      merchant: null,
+      source_app: null,
+      note: null,
+      category_id: null,
+      is_auto_detected: false,
+      raw_sms: null,
+      transaction_date: '2026-04-15T06:30:00.000Z',
+      created_at: '2026-04-15T06:30:00.000Z',
+      updated_at: null,
+      spending_categories: null,
+    })
+
+    const result = await mocks.registeredTools['get_transaction'].handler(
+      { transaction_id: 'tx-2' },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(parsed.category).toBeNull()
+    expect(parsed.icon).toBeNull()
+    expect(parsed.updated_at).toBeNull()
+  })
+})
+
+describe('list_categories', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.listCategories.mockResolvedValue([
+      { id: 'cat-food', name: 'Food', icon: '🍕', is_preset: true, created_at: '2026-04-01T00:00:00.000Z' },
+      { id: 'cat-custom', name: 'Pets', icon: '🐶', is_preset: false, created_at: '2026-04-10T00:00:00.000Z' },
+    ])
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['list_categories'].handler({}, { authInfo: noAuth }))
+      .rejects.toThrow('Unauthorized')
+  })
+
+  it('returns categories with preset flag', async () => {
+    const result = await mocks.registeredTools['list_categories'].handler({}, { authInfo })
+    const parsed = parseToolResult(result)
+
+    expect(mocks.listCategories).toHaveBeenCalledWith('user-1')
+    expect(parsed.total).toBe(2)
+    expect(parsed.categories[0].name).toBe('Food')
+    expect(parsed.categories[0].is_preset).toBe(true)
+    expect(parsed.categories[1].is_preset).toBe(false)
+  })
+
+  it('surfaces library errors', async () => {
+    mocks.listCategories.mockRejectedValue(new Error('DB down'))
+
+    const result = await mocks.registeredTools['list_categories'].handler({}, { authInfo })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: DB down')
+  })
+})
+
+describe('create_category', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['create_category'].handler(
+      { name: 'Pets', icon: '🐶' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('creates a category', async () => {
+    const result = await mocks.registeredTools['create_category'].handler(
+      { name: 'Pets', icon: '🐶' },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(mocks.createCategory).toHaveBeenCalledWith('user-1', 'Pets', '🐶')
+    expect(parsed.category_id).toBe('cat-new')
+    expect(parsed.name).toBe('Pets')
+    expect(parsed.is_preset).toBe(false)
+  })
+
+  it('surfaces duplicate-name error', async () => {
+    mocks.createCategory.mockRejectedValue(new Error('Category already exists'))
+
+    const result = await mocks.registeredTools['create_category'].handler(
+      { name: 'Food', icon: '🍕' },
+      { authInfo }
+    )
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Category already exists')
+  })
+})
+
+describe('update_category', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['update_category'].handler(
+      { category_id: 'cat-1', name: 'New' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('renames a category', async () => {
+    const result = await mocks.registeredTools['update_category'].handler(
+      { category_id: 'cat-custom', name: 'Dogs', icon: '🐕' },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(mocks.updateCategory).toHaveBeenCalledWith('user-1', 'cat-custom', { name: 'Dogs', icon: '🐕' })
+    expect(parsed.name).toBe('Dogs')
+    expect(parsed.icon).toBe('🐕')
+  })
+
+  it('blocks edits on preset categories', async () => {
+    mocks.updateCategory.mockRejectedValue(new Error('Cannot edit preset categories'))
+
+    const result = await mocks.registeredTools['update_category'].handler(
+      { category_id: 'cat-food', name: 'X' },
+      { authInfo }
+    )
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Cannot edit preset categories')
+  })
+})
+
+describe('delete_category', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['delete_category'].handler(
+      { category_id: 'cat-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('deletes a user category', async () => {
+    const result = await mocks.registeredTools['delete_category'].handler(
+      { category_id: 'cat-custom' },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(mocks.deleteCategory).toHaveBeenCalledWith('user-1', 'cat-custom')
+    expect(parsed).toEqual({
+      deleted: true,
+      category_id: 'cat-custom',
+      message: 'Category deleted',
+    })
+  })
+
+  it('blocks preset deletion', async () => {
+    mocks.deleteCategory.mockRejectedValue(new Error('Cannot delete preset categories'))
+
+    const result = await mocks.registeredTools['delete_category'].handler(
+      { category_id: 'cat-food' },
+      { authInfo }
+    )
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Cannot delete preset categories')
   })
 })

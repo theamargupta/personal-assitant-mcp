@@ -53,6 +53,43 @@ export async function createCategory(
   return data
 }
 
+export async function updateCategory(
+  userId: string,
+  categoryId: string,
+  updates: { name?: string; icon?: string }
+) {
+  const supabase = createServiceRoleClient()
+
+  const { data: existing } = await supabase
+    .from('spending_categories')
+    .select('is_preset')
+    .eq('id', categoryId)
+    .eq('user_id', userId)
+    .single()
+
+  if (!existing) throw new Error('Category not found')
+  if (existing.is_preset) throw new Error('Cannot edit preset categories')
+
+  const patch: Record<string, unknown> = {}
+  if (updates.name !== undefined) patch.name = updates.name.trim()
+  if (updates.icon !== undefined) patch.icon = updates.icon
+  if (Object.keys(patch).length === 0) throw new Error('No fields to update')
+
+  const { data, error } = await supabase
+    .from('spending_categories')
+    .update(patch)
+    .eq('id', categoryId)
+    .eq('user_id', userId)
+    .select('id, name, icon, is_preset, created_at')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') throw new Error('Category name already exists')
+    throw new Error(error.message)
+  }
+  return data
+}
+
 export async function deleteCategory(userId: string, categoryId: string) {
   const supabase = createServiceRoleClient()
 

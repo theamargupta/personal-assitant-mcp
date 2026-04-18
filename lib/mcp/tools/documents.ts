@@ -316,6 +316,61 @@ export function registerDocumentTools(server: McpServer) {
     }
   )
 
+  // ── update_document ─────────────────────────────────────
+  server.tool(
+    'update_document',
+    'Edit document metadata (name, description, tags). The underlying file and extracted text are immutable — re-upload to change the file.',
+    {
+      document_id: z.string().uuid().describe('UUID of the document'),
+      name: z.string().min(1).max(255).optional().describe('New name'),
+      description: z.string().max(1000).nullable().optional().describe('New description (null clears)'),
+      tags: z.array(z.string()).optional().describe('Replaces tag list entirely'),
+    },
+    async ({ document_id, name, description, tags }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+
+      const updates: Record<string, unknown> = {}
+      if (name !== undefined) updates.name = name.trim()
+      if (description !== undefined) updates.description = description === null ? null : description.trim()
+      if (tags !== undefined) updates.tags = tags
+
+      if (Object.keys(updates).length === 0) {
+        return { content: [{ type: 'text' as const, text: 'Error: No fields to update' }], isError: true }
+      }
+
+      const { data, error } = await supabase
+        .from('wallet_documents')
+        .update(updates)
+        .eq('id', document_id)
+        .eq('user_id', userId)
+        .select('id, name, description, doc_type, mime_type, tags, file_size, created_at')
+        .single()
+
+      if (error || !data) {
+        return { content: [{ type: 'text' as const, text: 'Error: Document not found' }], isError: true }
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            document_id: data.id,
+            name: data.name,
+            description: data.description,
+            doc_type: data.doc_type,
+            mime_type: data.mime_type,
+            file_size_bytes: data.file_size,
+            tags: data.tags,
+            created_at: toIST(new Date(data.created_at)),
+          }),
+        }],
+      }
+    }
+  )
+
   // ── delete_document ─────────────────────────────────────
   server.tool(
     'delete_document',

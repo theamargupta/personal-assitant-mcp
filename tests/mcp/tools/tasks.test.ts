@@ -36,7 +36,7 @@ registerTaskTools(server)
 
 const authInfo = { extra: { userId: 'user-1' } }
 const noAuth = { extra: {} }
-const methods = ['select', 'insert', 'update', 'delete', 'eq', 'neq', 'gte', 'lte', 'order', 'limit', 'range', 'single', 'maybeSingle']
+const methods = ['select', 'insert', 'update', 'delete', 'eq', 'neq', 'gte', 'lte', 'is', 'in', 'order', 'limit', 'range', 'single', 'maybeSingle']
 
 function createQuery(result: QueryResult = { data: null, error: null }): QueryChain {
   const chain = {} as QueryChain
@@ -149,6 +149,8 @@ describe('create_task', () => {
       tags: ['shopping'],
       task_type: 'personal',
       project: null,
+      parent_task_id: null,
+      position: null,
     })
     expect(parsed.task_id).toBe('t-1')
     expect(parsed.title).toBe('Buy milk')
@@ -418,6 +420,7 @@ describe('delete_task', () => {
       data: { id: 't-1', title: 'Old task' },
       error: null,
     }))
+    queue('tasks', createQuery({ count: 0, data: null, error: null }))
     queue('tasks', deleteChain)
 
     const result = await mocks.registeredTools['delete_task'].handler(
@@ -433,6 +436,7 @@ describe('delete_task', () => {
       deleted: true,
       task_id: 't-1',
       title: 'Old task',
+      cascaded_subtasks: 0,
       message: 'Task permanently deleted',
     })
   })
@@ -442,6 +446,7 @@ describe('delete_task', () => {
       data: { id: 't-1', title: 'Old task' },
       error: null,
     }))
+    queue('tasks', createQuery({ count: 0, data: null, error: null }))
     queue('tasks', createQuery({ error: { message: 'Delete failed' } }))
 
     const result = await mocks.registeredTools['delete_task'].handler(

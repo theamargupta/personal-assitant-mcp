@@ -67,6 +67,20 @@ export async function updateTransaction(
   return data
 }
 
+export async function getTransaction(userId: string, transactionId: string) {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, amount, merchant, source_app, note, transaction_date, category_id, is_auto_detected, raw_sms, created_at, updated_at, spending_categories(name, icon)')
+    .eq('id', transactionId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return data
+}
+
 export async function deleteTransaction(userId: string, transactionId: string) {
   const supabase = createServiceRoleClient()
   const { error } = await supabase

@@ -13,7 +13,7 @@ import {
   getRules,
   consolidateMemories,
 } from '@/lib/memory/items'
-import { createSpace, listSpaces, deleteSpace } from '@/lib/memory/spaces'
+import { createSpace, listSpaces, deleteSpace, getSpace, updateSpace, countSpaceItems } from '@/lib/memory/spaces'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { MemoryCategoryEnum } from '@/lib/memory/types'
 import { WIDGET_URIS } from '@/lib/mcp/widgets'
@@ -523,6 +523,81 @@ export function registerMemoryTools(server: McpServer) {
             count: spaces.length,
           }),
         }],
+      }
+    }
+  )
+
+  // ── get_space ───────────────────────────────────────────
+
+  server.tool(
+    'get_space',
+    'Fetch a memory space by id or slug. Includes active_item_count.',
+    {
+      id_or_slug: z.string().min(1).max(100).describe('Space UUID or slug'),
+    },
+    async ({ id_or_slug }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const space = await getSpace(userId, id_or_slug)
+      if (!space) {
+        return { content: [{ type: 'text' as const, text: 'Error: Space not found' }], isError: true }
+      }
+
+      const activeItemCount = await countSpaceItems(userId, space.id)
+      logAccess(userId, 'get_space', 'get_space', id_or_slug)
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            space_id: space.id,
+            name: space.name,
+            slug: space.slug,
+            description: space.description,
+            icon: space.icon,
+            active_item_count: activeItemCount,
+            created_at: toIST(new Date(space.created_at)),
+          }),
+        }],
+      }
+    }
+  )
+
+  // ── update_space ────────────────────────────────────────
+
+  server.tool(
+    'update_space',
+    'Rename a space, change its icon, or edit its description. The slug is immutable.',
+    {
+      id_or_slug: z.string().min(1).max(100).describe('Space UUID or slug'),
+      name: z.string().min(1).max(100).optional().describe('New display name'),
+      description: z.string().max(500).nullable().optional().describe('New description (null clears)'),
+      icon: z.string().max(10).optional().describe('New emoji icon'),
+    },
+    async ({ id_or_slug, name, description, icon }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const space = await updateSpace(userId, id_or_slug, { name, description, icon })
+        logAccess(userId, 'update_space', 'update_space', id_or_slug)
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              space_id: space.id,
+              name: space.name,
+              slug: space.slug,
+              description: space.description,
+              icon: space.icon,
+            }),
+          }],
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true }
       }
     }
   )

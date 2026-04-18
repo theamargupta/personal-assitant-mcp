@@ -3,8 +3,8 @@ import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { toIST } from '@/types'
-import { createTransaction, listTransactions, getSpendingSummary, updateTransaction, deleteTransaction } from '@/lib/finance/transactions'
-import { ensurePresetCategories } from '@/lib/finance/categories'
+import { createTransaction, listTransactions, getSpendingSummary, updateTransaction, deleteTransaction, getTransaction } from '@/lib/finance/transactions'
+import { ensurePresetCategories, listCategories, createCategory, updateCategory, deleteCategory } from '@/lib/finance/categories'
 import { createSpendingChartImage } from '@/lib/mcp/images'
 import { WIDGET_URIS } from '@/lib/mcp/widgets'
 
@@ -293,6 +293,194 @@ export function registerFinanceTools(server: McpServer) {
             message: 'Transaction updated',
           }),
         }],
+      }
+    }
+  )
+
+  // ── get_transaction ─────────────────────────────────────
+  server.tool(
+    'get_transaction',
+    'Fetch a single transaction with its category. Returns null category fields if uncategorized.',
+    {
+      transaction_id: z.string().uuid().describe('UUID of the transaction'),
+    },
+    async ({ transaction_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const tx = await getTransaction(userId, transaction_id)
+        if (!tx) {
+          return { content: [{ type: 'text' as const, text: 'Error: Transaction not found' }], isError: true }
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const anyTx = tx as any
+        const cat = Array.isArray(anyTx.spending_categories)
+          ? anyTx.spending_categories[0]
+          : anyTx.spending_categories
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              transaction_id: anyTx.id,
+              amount: Number(anyTx.amount),
+              merchant: anyTx.merchant,
+              source: anyTx.source_app,
+              note: anyTx.note,
+              category_id: anyTx.category_id,
+              category: cat?.name ?? null,
+              icon: cat?.icon ?? null,
+              is_auto_detected: anyTx.is_auto_detected,
+              raw_sms: anyTx.raw_sms,
+              date: toIST(new Date(anyTx.transaction_date)),
+              created_at: toIST(new Date(anyTx.created_at)),
+              updated_at: anyTx.updated_at ? toIST(new Date(anyTx.updated_at)) : null,
+            }),
+          }],
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Fetch failed'}` }],
+          isError: true,
+        }
+      }
+    }
+  )
+
+  // ── list_categories ─────────────────────────────────────
+  server.tool(
+    'list_categories',
+    'List all spending categories (presets + user-created). Preset categories are auto-seeded on first call.',
+    {},
+    async (_args, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const categories = await listCategories(userId)
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              categories: categories.map(c => ({
+                category_id: c.id,
+                name: c.name,
+                icon: c.icon,
+                is_preset: c.is_preset,
+                created_at: toIST(new Date(c.created_at)),
+              })),
+              total: categories.length,
+            }),
+          }],
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Failed to list categories'}` }],
+          isError: true,
+        }
+      }
+    }
+  )
+
+  // ── create_category ─────────────────────────────────────
+  server.tool(
+    'create_category',
+    'Create a custom spending category with a name and icon.',
+    {
+      name: z.string().min(1).max(100).describe('Category name (must be unique per user)'),
+      icon: z.string().min(1).max(10).describe('Icon — single emoji or short text, e.g. "🛒", "💊"'),
+    },
+    async ({ name, icon }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const cat = await createCategory(userId, name, icon)
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              category_id: cat.id,
+              name: cat.name,
+              icon: cat.icon,
+              is_preset: cat.is_preset,
+              created_at: toIST(new Date(cat.created_at)),
+            }),
+          }],
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Create failed'}` }],
+          isError: true,
+        }
+      }
+    }
+  )
+
+  // ── update_category ─────────────────────────────────────
+  server.tool(
+    'update_category',
+    'Rename or re-icon a user-created category. Preset categories are read-only.',
+    {
+      category_id: z.string().uuid().describe('UUID of the category'),
+      name: z.string().min(1).max(100).optional().describe('New name'),
+      icon: z.string().min(1).max(10).optional().describe('New icon'),
+    },
+    async ({ category_id, name, icon }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const cat = await updateCategory(userId, category_id, { name, icon })
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              category_id: cat.id,
+              name: cat.name,
+              icon: cat.icon,
+              is_preset: cat.is_preset,
+            }),
+          }],
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Update failed'}` }],
+          isError: true,
+        }
+      }
+    }
+  )
+
+  // ── delete_category ─────────────────────────────────────
+  server.tool(
+    'delete_category',
+    'Delete a user-created category. Preset categories cannot be deleted. Transactions using the category are not cascaded — they become uncategorized.',
+    {
+      category_id: z.string().uuid().describe('UUID of the category'),
+    },
+    async ({ category_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        await deleteCategory(userId, category_id)
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              deleted: true,
+              category_id,
+              message: 'Category deleted',
+            }),
+          }],
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Delete failed'}` }],
+          isError: true,
+        }
       }
     }
   )

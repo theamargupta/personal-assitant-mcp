@@ -400,4 +400,275 @@ describe('update_habit', () => {
     expect(parsed.name).toBe('Updated')
     expect(parsed.archived).toBe(true)
   })
+
+  it('updates reminder_time and clears it when null', async () => {
+    const setChain = createQuery({
+      data: { id: 'h-1', name: 'Upwork Proposals', archived: false, updated_at: '2026-04-18T12:00:00.000Z' },
+      error: null,
+    })
+    queue('habits', setChain)
+
+    await mocks.registeredTools['update_habit'].handler(
+      { habit_id: 'h-1', reminder_time: '18:00' },
+      { authInfo }
+    )
+
+    expect(setChain.update).toHaveBeenCalledWith({ reminder_time: '18:00' })
+
+    const clearChain = createQuery({
+      data: { id: 'h-1', name: 'Upwork Proposals', archived: false, updated_at: '2026-04-18T12:01:00.000Z' },
+      error: null,
+    })
+    queue('habits', clearChain)
+
+    await mocks.registeredTools['update_habit'].handler(
+      { habit_id: 'h-1', reminder_time: null },
+      { authInfo }
+    )
+
+    expect(clearChain.update).toHaveBeenCalledWith({ reminder_time: null })
+  })
+})
+
+describe('get_habit', () => {
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['get_habit'].handler(
+      { habit_id: 'h-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('returns error when habit not found', async () => {
+    queue('habits', createQuery({ data: null, error: { message: 'not found' } }))
+
+    const result = await mocks.registeredTools['get_habit'].handler(
+      { habit_id: 'h-bad' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Habit not found')
+  })
+
+  it('returns habit with streaks and last logged date', async () => {
+    const today = todayISTDate()
+    queue('habits', createQuery({
+      data: {
+        id: 'h-1',
+        name: 'Workout',
+        frequency: 'daily',
+        description: null,
+        color: '#3b82f6',
+        reminder_time: '07:00',
+        archived: false,
+        created_at: '2026-04-10T06:30:00.000Z',
+        updated_at: '2026-04-15T06:30:00.000Z',
+      },
+      error: null,
+    }))
+    queue('habit_logs', createQuery({ data: [{ logged_date: today }, { logged_date: addDays(today, -1) }], error: null }))
+    queue('habit_logs', createQuery({ data: [{ logged_date: addDays(today, -1) }, { logged_date: today }], error: null }))
+    queue('habit_logs', createQuery({ data: { logged_date: today }, error: null }))
+
+    const result = await mocks.registeredTools['get_habit'].handler(
+      { habit_id: 'h-1' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.habit_id).toBe('h-1')
+    expect(parsed.name).toBe('Workout')
+    expect(parsed.reminder_time).toBe('07:00')
+    expect(parsed.current_streak).toBe(2)
+    expect(parsed.best_streak).toBe(2)
+    expect(parsed.last_logged_date).toBe(today)
+  })
+})
+
+describe('delete_habit', () => {
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['delete_habit'].handler(
+      { habit_id: 'h-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('returns error when habit not found', async () => {
+    queue('habits', createQuery({ data: null, error: { message: 'not found' } }))
+
+    const result = await mocks.registeredTools['delete_habit'].handler(
+      { habit_id: 'h-bad' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Habit not found')
+  })
+
+  it('deletes habit and reports cascaded log count', async () => {
+    queue('habits', createQuery({ data: { id: 'h-1', name: 'Workout' }, error: null }))
+    queue('habit_logs', createQuery({ count: 7, data: null, error: null }))
+    const delChain = createQuery({ error: null })
+    queue('habits', delChain)
+
+    const result = await mocks.registeredTools['delete_habit'].handler(
+      { habit_id: 'h-1' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(delChain.delete).toHaveBeenCalled()
+    expect(parsed).toEqual({
+      deleted: true,
+      habit_id: 'h-1',
+      name: 'Workout',
+      cascaded_logs: 7,
+      message: 'Habit permanently deleted',
+    })
+  })
+
+  it('returns tool error when delete fails', async () => {
+    queue('habits', createQuery({ data: { id: 'h-1', name: 'Workout' }, error: null }))
+    queue('habit_logs', createQuery({ count: 0, data: null, error: null }))
+    queue('habits', createQuery({ error: { message: 'FK violation' } }))
+
+    const result = await mocks.registeredTools['delete_habit'].handler(
+      { habit_id: 'h-1' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: FK violation')
+  })
+})
+
+describe('update_habit_log', () => {
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['update_habit_log'].handler(
+      { log_id: 'log-1', notes: 'x' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('returns error when log not found', async () => {
+    queue('habit_logs', createQuery({ data: null, error: { message: 'not found' } }))
+
+    const result = await mocks.registeredTools['update_habit_log'].handler(
+      { log_id: 'log-bad', notes: 'x' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Habit log not found')
+  })
+
+  it('returns error when no fields provided', async () => {
+    queue('habit_logs', createQuery({ data: { id: 'log-1', habit_id: 'h-1', logged_date: '2026-04-15' }, error: null }))
+
+    const result = await mocks.registeredTools['update_habit_log'].handler(
+      { log_id: 'log-1' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: No fields to update')
+  })
+
+  it('updates date and notes', async () => {
+    queue('habit_logs', createQuery({ data: { id: 'log-1', habit_id: 'h-1', logged_date: '2026-04-15' }, error: null }))
+    const updChain = createQuery({
+      data: { id: 'log-1', habit_id: 'h-1', logged_date: '2026-04-16', notes: 'Updated' },
+      error: null,
+    })
+    queue('habit_logs', updChain)
+    queue('habit_logs', createQuery({ data: [], error: null }))
+
+    const result = await mocks.registeredTools['update_habit_log'].handler(
+      { log_id: 'log-1', logged_date: '2026-04-16', notes: 'Updated' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(updChain.update).toHaveBeenCalledWith({ logged_date: '2026-04-16', notes: 'Updated' })
+    expect(parsed.logged_date).toBe('2026-04-16')
+    expect(parsed.notes).toBe('Updated')
+  })
+
+  it('detects date collision via unique constraint', async () => {
+    queue('habit_logs', createQuery({ data: { id: 'log-1', habit_id: 'h-1', logged_date: '2026-04-15' }, error: null }))
+    queue('habit_logs', createQuery({ data: null, error: { message: 'duplicate key', code: '23505' } }))
+
+    const result = await mocks.registeredTools['update_habit_log'].handler(
+      { log_id: 'log-1', logged_date: '2026-04-14' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Already logged for 2026-04-14')
+  })
+})
+
+describe('delete_habit_log', () => {
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['delete_habit_log'].handler(
+      { log_id: 'log-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('requires log_id or (habit_id + date)', async () => {
+    const result = await mocks.registeredTools['delete_habit_log'].handler(
+      {},
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Pass log_id or (habit_id + date)')
+  })
+
+  it('deletes by log_id and returns new streak', async () => {
+    queue('habit_logs', createQuery({ data: { id: 'log-1', habit_id: 'h-1', logged_date: '2026-04-15' }, error: null }))
+    const delChain = createQuery({ error: null })
+    queue('habit_logs', delChain)
+    queue('habit_logs', createQuery({ data: [], error: null }))
+
+    const result = await mocks.registeredTools['delete_habit_log'].handler(
+      { log_id: 'log-1' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(delChain.delete).toHaveBeenCalled()
+    expect(parsed.deleted).toBe(true)
+    expect(parsed.log_id).toBe('log-1')
+    expect(parsed.logged_date).toBe('2026-04-15')
+    expect(parsed.current_streak).toBe(0)
+  })
+
+  it('deletes by habit_id + date', async () => {
+    queue('habit_logs', createQuery({ data: { id: 'log-2', habit_id: 'h-1', logged_date: '2026-04-15' }, error: null }))
+    queue('habit_logs', createQuery({ error: null }))
+    queue('habit_logs', createQuery({ data: [], error: null }))
+
+    const result = await mocks.registeredTools['delete_habit_log'].handler(
+      { habit_id: 'h-1', date: '2026-04-15' },
+      { authInfo }
+    )
+
+    const parsed = parseToolResult(result)
+    expect(parsed.deleted).toBe(true)
+    expect(parsed.log_id).toBe('log-2')
+  })
+
+  it('returns error when log not found', async () => {
+    queue('habit_logs', createQuery({ data: null, error: { message: 'not found' } }))
+
+    const result = await mocks.registeredTools['delete_habit_log'].handler(
+      { log_id: 'log-bad' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Habit log not found')
+  })
 })

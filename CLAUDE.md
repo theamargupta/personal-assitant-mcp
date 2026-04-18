@@ -49,7 +49,7 @@ lib/
     oauth.ts                        # OAuth 2.0 implementation (~510 lines)
     tools/
       habits.ts                     # 5 habit tools (~373 lines)
-      tasks.ts                      # 4 task tools (~235 lines)
+      tasks.ts                      # 7 task tools (create, list, update_status, update, complete, delete, get)
       documents.ts                  # 5 document wallet tools
       finance.ts                    # 4 finance tools
       goals.ts                      # 6 goal tools (create, list, update, progress, review, milestone)
@@ -91,51 +91,68 @@ app/api/finance/
 
 ## MCP Tools
 
-### Habit Tools (6)
+### Habit Tools (10)
 
 | Tool | Description |
 |------|-------------|
 | `list_habits` | List habits with filters (frequency, archived), current streak per habit, pagination |
 | `create_habit` | Create habit with name, frequency (daily/weekly/monthly), description, color, reminder_time |
-| `log_habit_completion` | Log daily completion with notes; unique constraint per (habit_id, logged_date) |
+| `get_habit` | Single habit + current/best streak + last logged date |
+| `update_habit` | Modify properties or archive |
+| `delete_habit` | Permanently delete a habit; cascades all habit_logs |
+| `log_habit_completion` | Log daily completion with notes; unique per (habit_id, logged_date) |
+| `update_habit_log` | Edit a log (logged_date, notes); duplicate-date collision reported |
+| `delete_habit_log` | Un-log a completion by log_id or (habit_id + date); returns new streak |
 | `get_habit_streak` | Current streak, best streak, last logged date |
 | `get_habit_analytics` | N-day completion %, day-by-day breakdown, streaks |
-| `update_habit` | Modify properties or archive |
 
-### Task Tools (6)
+### Task Tools (13)
 
 | Tool | Description |
 |------|-------------|
-| `create_task` | Title, description (up to 10k chars), due date, priority, tags, `task_type` ('personal' \| 'project'), `project` (required when type='project') |
-| `list_tasks` | Filter by status/priority/due date/`task_type`/`project`; pagination |
+| `create_task` | Title, description, due date, priority, tags, task_type, project; pass `parent_task_id` to create as subtask |
+| `list_tasks` | Top-level tasks by default (`include_subtasks` flag); each row includes `subtask_progress` |
 | `update_task_status` | Status transitions with notes |
-| `complete_task` | Mark completed with overdue detection, time-to-completion calc |
-| `delete_task` | Permanently delete a task |
-| `get_task` | Fetch task + for project-typed tasks, attach `{ summary, rules, relevant (top-10 hybrid search), claude_md_hint }` drawn from `pa_memory_items` — ready to paste into a new Claude Code session |
+| `update_task` | Generic edit (title/desc/due/priority/tags/task_type/project); cascades type/project to subtasks; blocked on subtasks for inherited fields |
+| `complete_task` | Mark completed; `parent_auto_complete_hint` emitted when last sibling completes |
+| `delete_task` | Permanently delete; cascades subtasks via FK; returns `cascaded_subtasks` count |
+| `get_task` | Task + subtasks + subtask_progress; project tasks also return project_context (summary/rules/relevant/claude_md_hint) |
+| `add_subtask` | Add subtask under parent (inherits task_type + project, auto-position at end) |
+| `get_subtask` | Fetch a subtask; errors on top-level rows |
+| `list_subtasks` | Subtasks of a parent ordered by position + progress |
+| `update_subtask` | Edit title/desc/due/priority/tags (type/project locked to parent) |
+| `reorder_subtasks` | Reorder by passing ordered id array |
+| `delete_subtask` | Delete a single subtask (does not reorder siblings) |
 
-### Document Wallet Tools (6)
+### Document Wallet Tools (7)
 
 | Tool | Description |
 |------|-------------|
-| `upload_document` | Returns a signed upload URL + creates pending document record. Client uploads file directly to Supabase Storage. |
-| `confirm_upload` | After file is uploaded to the signed URL, triggers text extraction, chunking, and embedding. Marks document as ready. |
-| `list_documents` | List documents with filters by type and tags (only shows ready documents) |
-| `get_document` | Get document details + signed download URL (1hr expiry) |
+| `upload_document` | Returns a signed upload URL + creates pending document record |
+| `confirm_upload` | Triggers text extraction, chunking, and embedding; marks document ready |
+| `list_documents` | Filter by type and tags (ready only) |
+| `get_document` | Details + signed download URL (1hr expiry) |
+| `update_document` | Edit name/description/tags metadata; file + extracted_text are immutable |
 | `search_documents` | Semantic search across all document content |
 | `delete_document` | Permanently delete document, chunks, and stored file |
 
-### Finance Tools (6)
+### Finance Tools (11)
 
 | Tool | Description |
 |------|-------------|
 | `get_spending_summary` | Total spent in date range, broken down by category |
-| `list_transactions` | List transactions with filters (category, date range, merchant) |
+| `list_transactions` | Filters: category, date range, merchant |
 | `add_transaction` | Manual entry via Claude chat |
-| `update_transaction` | Update category, merchant, amount, or note on existing transaction |
+| `get_transaction` | Single transaction + joined category name/icon |
+| `update_transaction` | Update category, merchant, amount, or note |
 | `delete_transaction` | Permanently delete a transaction |
 | `get_uncategorized` | Show transactions pending categorization |
+| `list_categories` | List presets + custom categories (auto-seeds presets) |
+| `create_category` | Create a custom category with name + icon |
+| `update_category` | Rename or re-icon user categories (presets read-only) |
+| `delete_category` | Delete user categories (presets blocked) |
 
-### Goal Tools (7)
+### Goal Tools (9)
 
 | Tool | Description |
 |------|-------------|
@@ -144,10 +161,12 @@ app/api/finance/
 | `update_goal` | Update goal properties or toggle milestone completion |
 | `get_goal_progress` | Detailed progress for a goal including milestones |
 | `get_review` | Comprehensive period review: habits + tasks + finance + goals + highlights |
-| `delete_goal` | Permanently delete a goal and its milestones (hard delete for test/cleanup) |
+| `delete_goal` | Permanently delete a goal and its milestones |
 | `add_milestone` | Add sub-steps to milestone-type goals |
+| `update_milestone` | Edit title/sort_order/completed on a milestone; last-completed auto-closes parent goal |
+| `delete_milestone` | Permanently delete a single milestone |
 
-### Memory Tools (11)
+### Memory Tools (13)
 
 | Tool | Description |
 |------|-------------|
@@ -162,6 +181,9 @@ app/api/finance/
 | `consolidate_memories` | Report duplicate groups (`pa_match_memories` at 0.9) and/or stale candidates (`computeStaleHint`); optional `space_slug`. Widget: `memory-consolidator.html`. |
 | `create_space` | Create new memory space/vault |
 | `list_spaces` | List all spaces |
+| `get_space` | Fetch space by id/slug + `active_item_count` |
+| `update_space` | Rename or edit description/icon (slug is immutable) |
+| `delete_space` | Delete non-default space (personal + projects blocked); items cascade |
 
 **Memory Vaults — Phase 2 & 3 (2026-04-16):** Duplicate detection on save, hybrid lexical + semantic search, stale hints for old low-importance or superseded items, and `consolidate_memories` for review. Four tools use `registerAppTool` with `_meta.ui.resourceUri` for ExtApps HTML (`save_memory`, `search_memory`, `get_context`, `consolidate_memories`). Apply Supabase migration `008_memory_hybrid_search.sql` so `search_vector`, trigger, `pa_hybrid_search`, and updated `pa_match_memories` exist in the database.
 
@@ -255,7 +277,7 @@ npm run lint       # ESLint 9 flat config (eslint.config.mjs — extends eslint-
 - Full OAuth 2.0 with PKCE
 - Database schema + migrations
 - Habit tools (5/5)
-- Task tools (4/4)
+- Task tools (7/7)
 - Document Wallet tools (5/5)
 - Finance tools (4/4)
 - Goal tools (6/6) — outcome goals (auto-tracked from habits/tasks/finance), milestone goals, cross-module review
@@ -276,6 +298,7 @@ npm run lint       # ESLint 9 flat config (eslint.config.mjs — extends eslint-
 
 ### Dashboard Pages (authenticated)
 - `/dashboard` — Overview with stat cards (best streak, tasks this week, spending this month, active goals)
+- `/dashboard/chat` — Streaming chat with Claude / ChatGPT (mirrors mobile `ChatSheetContent`). Reuses `/api/chat` SSE endpoint via `lib/chat/client.ts`. Component: `components/dashboard/Chat.tsx`. Provider preference persists in `localStorage` (`sathi_chat_provider`).
 - `/dashboard/habits` — Habit list, streaks, completion bars, log today
 - `/dashboard/tasks` — Task list with filters, priority badges, create/update
 - `/dashboard/finance` — Spending summary, category breakdown, transaction list, add expense

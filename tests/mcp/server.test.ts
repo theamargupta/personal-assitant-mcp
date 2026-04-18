@@ -128,8 +128,8 @@ describe('createMcpServer', () => {
     expect(toolNames).toContain('consolidate_memories')
   })
 
-  it('registers exactly 43 tools total', () => {
+  it('registers exactly 64 tools total', () => {
     const server = createMcpServer() as unknown as { tools: Array<{ name: string }> }
-    expect(server.tools).toHaveLength(43)
+    expect(server.tools).toHaveLength(64)
   })
 })

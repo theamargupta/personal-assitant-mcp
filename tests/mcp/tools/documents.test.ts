@@ -572,3 +572,82 @@ describe('delete_document', () => {
     expect(result.content[0].text).toBe('Error: Delete failed')
   })
 })
+
+describe('update_document', () => {
+  it('returns error when no fields provided', async () => {
+    const result = await mocks.registeredTools['update_document'].handler(
+      { document_id: 'doc-1' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: No fields to update')
+  })
+
+  it('returns error when document not found', async () => {
+    queueFrom(createQuery({ data: null, error: { message: 'not found' } }))
+
+    const result = await mocks.registeredTools['update_document'].handler(
+      { document_id: 'doc-bad', name: 'New' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Document not found')
+  })
+
+  it('updates name, description, and tags', async () => {
+    const updChain = createQuery({
+      data: {
+        id: 'doc-1',
+        name: 'New name',
+        description: 'Updated',
+        doc_type: 'pdf',
+        mime_type: 'application/pdf',
+        tags: ['bill', 'urgent'],
+        file_size: 1024,
+        created_at: '2026-04-10T06:30:00.000Z',
+      },
+      error: null,
+    })
+    queueFrom(updChain)
+
+    const result = await mocks.registeredTools['update_document'].handler(
+      { document_id: 'doc-1', name: ' New name ', description: ' Updated ', tags: ['bill', 'urgent'] },
+      { authInfo }
+    )
+
+    const parsed = parseResult(result)
+    expect(updChain.update).toHaveBeenCalledWith({
+      name: 'New name',
+      description: 'Updated',
+      tags: ['bill', 'urgent'],
+    })
+    expect(parsed.name).toBe('New name')
+    expect(parsed.tags).toEqual(['bill', 'urgent'])
+  })
+
+  it('clears description when null is passed', async () => {
+    const updChain = createQuery({
+      data: {
+        id: 'doc-1',
+        name: 'Doc',
+        description: null,
+        doc_type: 'pdf',
+        mime_type: 'application/pdf',
+        tags: [],
+        file_size: 0,
+        created_at: '2026-04-10T06:30:00.000Z',
+      },
+      error: null,
+    })
+    queueFrom(updChain)
+
+    await mocks.registeredTools['update_document'].handler(
+      { document_id: 'doc-1', description: null },
+      { authInfo }
+    )
+
+    expect(updChain.update).toHaveBeenCalledWith({ description: null })
+  })
+})

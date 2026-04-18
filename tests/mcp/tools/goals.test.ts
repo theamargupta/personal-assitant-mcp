@@ -54,6 +54,19 @@ const mocks = vi.hoisted(() => ({
     completed: true,
     completed_at: '2026-04-15T06:30:00.000Z',
   })),
+  updateMilestone: vi.fn(async (_userId: string, milestoneId: string, updates: { title?: string; sortOrder?: number; completed?: boolean }) => ({
+    id: milestoneId,
+    goal_id: 'g-1',
+    title: updates.title ?? 'Step',
+    sort_order: updates.sortOrder ?? 0,
+    completed: updates.completed ?? false,
+    completed_at: updates.completed ? '2026-04-15T06:30:00.000Z' : null,
+  })),
+  deleteMilestone: vi.fn(async (_userId: string, milestoneId: string) => ({
+    id: milestoneId,
+    goal_id: 'g-1',
+    title: 'Deleted step',
+  })),
   computeGoalProgress: vi.fn(async () => ({
     currentValue: 10,
     targetValue: 20,
@@ -89,6 +102,8 @@ vi.mock('@/lib/goals/goals', () => ({
   updateGoal: mocks.updateGoal,
   addMilestone: mocks.addMilestone,
   toggleMilestone: mocks.toggleMilestone,
+  updateMilestone: mocks.updateMilestone,
+  deleteMilestone: mocks.deleteMilestone,
   computeGoalProgress: mocks.computeGoalProgress,
 }))
 
@@ -551,5 +566,96 @@ describe('add_milestone', () => {
     expect(parsed.milestone_id).toBe('ms-3')
     expect(parsed.title).toBe('Third step')
     expect(parsed.sort_order).toBe(3)
+  })
+})
+
+describe('update_milestone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['update_milestone'].handler(
+      { milestone_id: 'ms-1', title: 'x' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('updates title and sort_order', async () => {
+    const result = await mocks.registeredTools['update_milestone'].handler(
+      { milestone_id: 'ms-1', title: 'Renamed', sort_order: 5 },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(mocks.updateMilestone).toHaveBeenCalledWith('user-1', 'ms-1', {
+      title: 'Renamed',
+      sortOrder: 5,
+      completed: undefined,
+    })
+    expect(parsed.title).toBe('Renamed')
+    expect(parsed.sort_order).toBe(5)
+    expect(parsed.completed).toBe(false)
+  })
+
+  it('marks as completed with timestamp', async () => {
+    const result = await mocks.registeredTools['update_milestone'].handler(
+      { milestone_id: 'ms-1', completed: true },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(parsed.completed).toBe(true)
+    expect(parsed.completed_at).not.toBeNull()
+  })
+
+  it('surfaces library errors', async () => {
+    mocks.updateMilestone.mockRejectedValue(new Error('Milestone not found'))
+
+    const result = await mocks.registeredTools['update_milestone'].handler(
+      { milestone_id: 'ms-bad', title: 'x' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Milestone not found')
+  })
+})
+
+describe('delete_milestone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws when unauthorized', async () => {
+    await expect(mocks.registeredTools['delete_milestone'].handler(
+      { milestone_id: 'ms-1' },
+      { authInfo: noAuth }
+    )).rejects.toThrow('Unauthorized')
+  })
+
+  it('deletes a milestone', async () => {
+    const result = await mocks.registeredTools['delete_milestone'].handler(
+      { milestone_id: 'ms-1' },
+      { authInfo }
+    )
+    const parsed = parseToolResult(result)
+
+    expect(mocks.deleteMilestone).toHaveBeenCalledWith('user-1', 'ms-1')
+    expect(parsed.deleted).toBe(true)
+    expect(parsed.milestone_id).toBe('ms-1')
+    expect(parsed.goal_id).toBe('g-1')
+  })
+
+  it('surfaces library errors', async () => {
+    mocks.deleteMilestone.mockRejectedValue(new Error('Milestone not found'))
+
+    const result = await mocks.registeredTools['delete_milestone'].handler(
+      { milestone_id: 'ms-bad' },
+      { authInfo }
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Milestone not found')
   })
 })

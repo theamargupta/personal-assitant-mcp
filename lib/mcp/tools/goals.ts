@@ -8,6 +8,8 @@ import {
   updateGoal,
   addMilestone,
   toggleMilestone,
+  updateMilestone,
+  deleteMilestone,
   computeGoalProgress,
 } from '@/lib/goals/goals'
 import { generateReview } from '@/lib/goals/review'
@@ -387,6 +389,83 @@ export function registerGoalTools(server: McpServer) {
             created_at: toIST(new Date(milestone.created_at)),
           }),
         }],
+      }
+    }
+  )
+
+  // ── update_milestone ────────────────────────────────────
+  server.tool(
+    'update_milestone',
+    'Edit a milestone (title, sort_order, completed). Marking the last pending milestone as completed auto-completes the parent goal.',
+    {
+      milestone_id: z.string().uuid().describe('UUID of the milestone'),
+      title: z.string().min(1).max(255).optional().describe('New title'),
+      sort_order: z.number().int().min(0).optional().describe('New sort order (0-based)'),
+      completed: z.boolean().optional().describe('Mark complete or un-complete'),
+    },
+    async ({ milestone_id, title, sort_order, completed }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const ms = await updateMilestone(userId, milestone_id, {
+          title,
+          sortOrder: sort_order,
+          completed,
+        })
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              milestone_id: ms.id,
+              goal_id: ms.goal_id,
+              title: ms.title,
+              sort_order: ms.sort_order,
+              completed: ms.completed,
+              completed_at: ms.completed_at ? toIST(new Date(ms.completed_at)) : null,
+            }),
+          }],
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Update failed'}` }],
+          isError: true,
+        }
+      }
+    }
+  )
+
+  // ── delete_milestone ────────────────────────────────────
+  server.tool(
+    'delete_milestone',
+    'Permanently delete a milestone. The parent goal is untouched.',
+    {
+      milestone_id: z.string().uuid().describe('UUID of the milestone'),
+    },
+    async ({ milestone_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      try {
+        const ms = await deleteMilestone(userId, milestone_id)
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              deleted: true,
+              milestone_id: ms.id,
+              goal_id: ms.goal_id,
+              title: ms.title,
+              message: 'Milestone permanently deleted',
+            }),
+          }],
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : 'Delete failed'}` }],
+          isError: true,
+        }
       }
     }
   )

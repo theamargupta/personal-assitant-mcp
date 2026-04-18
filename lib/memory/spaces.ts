@@ -93,6 +93,66 @@ export async function deleteSpace(
   if (error) throw new Error(`Failed to delete space: ${error.message}`)
 }
 
+export async function getSpace(
+  userId: string,
+  idOrSlug: string
+): Promise<MemorySpace | null> {
+  const supabase = createServiceRoleClient()
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug)
+
+  const { data } = await supabase
+    .from('pa_memory_spaces')
+    .select('*')
+    .eq('user_id', userId)
+    .eq(isUuid ? 'id' : 'slug', idOrSlug)
+    .maybeSingle()
+
+  return (data as MemorySpace | null) ?? null
+}
+
+export async function updateSpace(
+  userId: string,
+  idOrSlug: string,
+  updates: { name?: string; description?: string | null; icon?: string }
+): Promise<MemorySpace> {
+  const supabase = createServiceRoleClient()
+
+  const existing = await getSpace(userId, idOrSlug)
+  if (!existing) throw new Error(`Space not found`)
+
+  const patch: Record<string, unknown> = {}
+  if (updates.name !== undefined) patch.name = updates.name.trim()
+  if (updates.description !== undefined) {
+    patch.description = updates.description === null ? null : updates.description.trim()
+  }
+  if (updates.icon !== undefined) patch.icon = updates.icon
+
+  if (Object.keys(patch).length === 0) throw new Error('No fields to update')
+
+  const { data, error } = await supabase
+    .from('pa_memory_spaces')
+    .update(patch)
+    .eq('id', existing.id)
+    .eq('user_id', userId)
+    .select()
+    .single()
+
+  if (error || !data) throw new Error(`Failed to update space: ${error?.message ?? 'unknown error'}`)
+  return data as MemorySpace
+}
+
+export async function countSpaceItems(userId: string, spaceId: string): Promise<number> {
+  const supabase = createServiceRoleClient()
+  const { count } = await supabase
+    .from('pa_memory_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('space_id', spaceId)
+    .eq('is_active', true)
+  return count ?? 0
+}
+
 export async function listSpaces(userId: string): Promise<MemorySpace[]> {
   const supabase = createServiceRoleClient()
 

@@ -244,6 +244,148 @@ export function registerHabitTools(server: McpServer) {
     }
   )
 
+  // ── update_habit_log ─────────────────────────────────
+  server.tool(
+    'update_habit_log',
+    'Edit a habit log (change logged_date or notes). Errors if the new date collides with an existing log for the same habit.',
+    {
+      log_id: z.string().uuid().describe('UUID of the habit_log row'),
+      logged_date: z.string().date().optional().describe('New date YYYY-MM-DD'),
+      notes: z.string().max(500).nullable().optional().describe('New notes or null to clear'),
+    },
+    async ({ log_id, logged_date, notes }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+
+      const { data: existing, error: fetchErr } = await supabase
+        .from('habit_logs')
+        .select('id, habit_id, logged_date')
+        .eq('id', log_id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchErr || !existing) {
+        return { content: [{ type: 'text' as const, text: 'Error: Habit log not found' }], isError: true }
+      }
+
+      const updates: Record<string, unknown> = {}
+      if (logged_date !== undefined) updates.logged_date = logged_date
+      if (notes !== undefined) updates.notes = notes === null ? null : notes.trim()
+
+      if (Object.keys(updates).length === 0) {
+        return { content: [{ type: 'text' as const, text: 'Error: No fields to update' }], isError: true }
+      }
+
+      const { data, error } = await supabase
+        .from('habit_logs')
+        .update(updates)
+        .eq('id', log_id)
+        .eq('user_id', userId)
+        .select('id, habit_id, logged_date, notes')
+        .single()
+
+      if (error || !data) {
+        if (error?.code === '23505' || error?.message?.includes('duplicate')) {
+          return { content: [{ type: 'text' as const, text: `Error: Already logged for ${logged_date}` }], isError: true }
+        }
+        return { content: [{ type: 'text' as const, text: `Error: ${error?.message ?? 'update failed'}` }], isError: true }
+      }
+
+      const newStreak = await calculateCurrentStreak(data.habit_id)
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            log_id: data.id,
+            habit_id: data.habit_id,
+            logged_date: data.logged_date,
+            notes: data.notes,
+            current_streak: newStreak,
+          }),
+        }],
+      }
+    }
+  )
+
+  // ── delete_habit_log ─────────────────────────────────
+  server.tool(
+    'delete_habit_log',
+    'Un-log a habit completion. Pass either log_id OR (habit_id + date). Returns the new current streak.',
+    {
+      log_id: z.string().uuid().optional().describe('UUID of the log row'),
+      habit_id: z.string().uuid().optional().describe('UUID of the habit (when using habit_id + date lookup)'),
+      date: z.string().date().optional().describe('Date to un-log (YYYY-MM-DD); requires habit_id'),
+    },
+    async ({ log_id, habit_id, date }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      if (!log_id && !(habit_id && date)) {
+        return { content: [{ type: 'text' as const, text: 'Error: Pass log_id or (habit_id + date)' }], isError: true }
+      }
+
+      const supabase = createServiceRoleClient()
+
+      let existing: { id: string; habit_id: string; logged_date: string } | null = null
+      if (log_id) {
+        const { data, error } = await supabase
+          .from('habit_logs')
+          .select('id, habit_id, logged_date')
+          .eq('id', log_id)
+          .eq('user_id', userId)
+          .single()
+        if (error || !data) {
+          return { content: [{ type: 'text' as const, text: 'Error: Habit log not found' }], isError: true }
+        }
+        existing = data as typeof existing
+      } else if (habit_id && date) {
+        const { data, error } = await supabase
+          .from('habit_logs')
+          .select('id, habit_id, logged_date')
+          .eq('habit_id', habit_id)
+          .eq('user_id', userId)
+          .eq('logged_date', date)
+          .maybeSingle()
+        if (error || !data) {
+          return { content: [{ type: 'text' as const, text: 'Error: Habit log not found' }], isError: true }
+        }
+        existing = data as typeof existing
+      }
+
+      if (!existing) {
+        return { content: [{ type: 'text' as const, text: 'Error: Habit log not found' }], isError: true }
+      }
+
+      const { error: delErr } = await supabase
+        .from('habit_logs')
+        .delete()
+        .eq('id', existing.id)
+        .eq('user_id', userId)
+
+      if (delErr) {
+        return { content: [{ type: 'text' as const, text: `Error: ${delErr.message}` }], isError: true }
+      }
+
+      const newStreak = await calculateCurrentStreak(existing.habit_id)
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            deleted: true,
+            log_id: existing.id,
+            habit_id: existing.habit_id,
+            logged_date: existing.logged_date,
+            current_streak: newStreak,
+          }),
+        }],
+      }
+    }
+  )
+
   // ── get_habit_streak ─────────────────────────────────
   server.tool(
     'get_habit_streak',
@@ -377,16 +519,129 @@ export function registerHabitTools(server: McpServer) {
     }
   )
 
+  // ── get_habit ────────────────────────────────────────
+  server.tool(
+    'get_habit',
+    'Fetch a single habit with current/best streak and last log date.',
+    {
+      habit_id: z.string().uuid().describe('UUID of the habit'),
+    },
+    async ({ habit_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+      const { data: habit, error } = await supabase
+        .from('habits')
+        .select('id, name, frequency, description, color, reminder_time, archived, created_at, updated_at')
+        .eq('id', habit_id)
+        .eq('user_id', userId)
+        .single()
+
+      if (error || !habit) {
+        return { content: [{ type: 'text' as const, text: 'Error: Habit not found' }], isError: true }
+      }
+
+      const [currentStreak, bestStreak, lastLogResult] = await Promise.all([
+        calculateCurrentStreak(habit_id),
+        calculateBestStreak(habit_id),
+        supabase
+          .from('habit_logs')
+          .select('logged_date')
+          .eq('habit_id', habit_id)
+          .order('logged_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ])
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            habit_id: habit.id,
+            name: habit.name,
+            frequency: habit.frequency,
+            description: habit.description,
+            color: habit.color,
+            reminder_time: habit.reminder_time,
+            archived: habit.archived,
+            current_streak: currentStreak,
+            best_streak: bestStreak,
+            last_logged_date: (lastLogResult.data as { logged_date: string } | null)?.logged_date ?? null,
+            created_at: toIST(new Date(habit.created_at)),
+            updated_at: toIST(new Date(habit.updated_at)),
+          }),
+        }],
+      }
+    }
+  )
+
+  // ── delete_habit ─────────────────────────────────────
+  server.tool(
+    'delete_habit',
+    'Permanently delete a habit. All habit_logs cascade-delete via FK. Prefer archive (update_habit archived=true) for soft removal.',
+    {
+      habit_id: z.string().uuid().describe('UUID of the habit to delete'),
+    },
+    async ({ habit_id }, { authInfo }) => {
+      const userId = authInfo?.extra?.userId as string
+      if (!userId) throw new Error('Unauthorized')
+
+      const supabase = createServiceRoleClient()
+
+      const { data: habit, error: fetchErr } = await supabase
+        .from('habits')
+        .select('id, name')
+        .eq('id', habit_id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchErr || !habit) {
+        return { content: [{ type: 'text' as const, text: 'Error: Habit not found' }], isError: true }
+      }
+
+      const { count: logCount } = await supabase
+        .from('habit_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('habit_id', habit_id)
+        .eq('user_id', userId)
+
+      const { error: delErr } = await supabase
+        .from('habits')
+        .delete()
+        .eq('id', habit_id)
+        .eq('user_id', userId)
+
+      if (delErr) {
+        return { content: [{ type: 'text' as const, text: `Error: ${delErr.message}` }], isError: true }
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            deleted: true,
+            habit_id,
+            name: habit.name,
+            cascaded_logs: logCount ?? 0,
+            message: 'Habit permanently deleted',
+          }),
+        }],
+      }
+    }
+  )
+
   // ── update_habit ─────────────────────────────────────
   server.tool(
     'update_habit',
-    'Update habit details (name, frequency, color, description) or archive it.',
+    'Update habit details (name, frequency, color, description, reminder_time) or archive it.',
     {
       habit_id: z.string().uuid().describe('UUID of the habit'),
       name: z.string().min(1).max(255).optional().describe('New name'),
       frequency: z.enum(['daily', 'weekly', 'monthly']).optional().describe('New frequency'),
       description: z.string().max(1000).nullable().optional().describe('New description or null to clear'),
       color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe('New hex color'),
+      reminder_time: z.string().nullable().optional().describe('New reminder time (HH:mm) or null to clear'),
       archived: z.boolean().optional().describe('Set true to archive'),
     },
     async ({ habit_id, ...fields }, { authInfo }) => {
@@ -398,6 +653,7 @@ export function registerHabitTools(server: McpServer) {
       if (fields.frequency !== undefined) updates.frequency = fields.frequency
       if (fields.description !== undefined) updates.description = fields.description?.trim() || null
       if (fields.color !== undefined) updates.color = fields.color
+      if (fields.reminder_time !== undefined) updates.reminder_time = fields.reminder_time || null
       if (fields.archived !== undefined) updates.archived = fields.archived
 
       if (Object.keys(updates).length === 0) {

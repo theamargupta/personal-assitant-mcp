@@ -174,6 +174,84 @@ export async function toggleMilestone(userId: string, milestoneId: string) {
   return data
 }
 
+export async function updateMilestone(
+  userId: string,
+  milestoneId: string,
+  updates: { title?: string; sortOrder?: number; completed?: boolean }
+) {
+  const supabase = createServiceRoleClient()
+
+  const { data: existing } = await supabase
+    .from('goal_milestones')
+    .select('id, goal_id, completed')
+    .eq('id', milestoneId)
+    .eq('user_id', userId)
+    .single()
+
+  if (!existing) throw new Error('Milestone not found')
+
+  const patch: Record<string, unknown> = {}
+  if (updates.title !== undefined) patch.title = updates.title.trim()
+  if (updates.sortOrder !== undefined) patch.sort_order = updates.sortOrder
+  if (updates.completed !== undefined) {
+    patch.completed = updates.completed
+    patch.completed_at = updates.completed ? new Date().toISOString() : null
+  }
+
+  if (Object.keys(patch).length === 0) throw new Error('No fields to update')
+
+  const { data, error } = await supabase
+    .from('goal_milestones')
+    .update(patch)
+    .eq('id', milestoneId)
+    .eq('user_id', userId)
+    .select('id, goal_id, title, sort_order, completed, completed_at')
+    .single()
+
+  if (error || !data) throw new Error(error?.message ?? 'Update failed')
+
+  // If newly completed and all siblings done → auto-complete goal
+  if (updates.completed === true && !existing.completed) {
+    const { count } = await supabase
+      .from('goal_milestones')
+      .select('*', { count: 'exact', head: true })
+      .eq('goal_id', existing.goal_id)
+      .eq('completed', false)
+
+    if (count === 0) {
+      await supabase
+        .from('goals')
+        .update({ status: 'completed', updated_at: new Date().toISOString() })
+        .eq('id', existing.goal_id)
+        .eq('user_id', userId)
+    }
+  }
+
+  return data
+}
+
+export async function deleteMilestone(userId: string, milestoneId: string) {
+  const supabase = createServiceRoleClient()
+
+  const { data: existing } = await supabase
+    .from('goal_milestones')
+    .select('id, goal_id, title')
+    .eq('id', milestoneId)
+    .eq('user_id', userId)
+    .single()
+
+  if (!existing) throw new Error('Milestone not found')
+
+  const { error } = await supabase
+    .from('goal_milestones')
+    .delete()
+    .eq('id', milestoneId)
+    .eq('user_id', userId)
+
+  if (error) throw new Error(error.message)
+  return existing
+}
+
 // ── Progress computation ────────────────────────────────
 
 export async function computeGoalProgress(
