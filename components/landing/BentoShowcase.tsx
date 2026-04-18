@@ -187,14 +187,14 @@ export function BentoShowcase() {
           className="text-center mb-14"
         >
           <span className="text-[11px] font-medium uppercase tracking-[0.25em] text-text-muted mb-4 block">
-            25 Tools &middot; 5 Modules
+            ALL 25 TOOLS
           </span>
           <h2 className="text-[clamp(2rem,4.5vw,3.25rem)] font-bold tracking-[-0.03em] leading-[1] [text-wrap:balance]">
-            Everything in{' '}
-            <span className="text-neon">one place</span>
+            Every tool.{' '}
+            <span className="text-neon">Every module.</span>
           </h2>
           <p className="mt-5 text-text-secondary max-w-lg mx-auto text-[15px] leading-relaxed [text-wrap:pretty]">
-            Five modules that talk to each other. Ask Claude anything — it sees the full picture.
+            The full MCP surface. Swipe through what Sathi can do, then open Claude and try it.
           </p>
         </motion.div>
 

@@ -1,7 +1,7 @@
 # API Conventions
 
 ## MCP (`api/mcp/route.ts`)
-- POST only. Bearer token required. STATELESS - new MCP server per request.
+- POST only. Bearer token required. STATELESS — new MCP server per request.
 - Extract user id from OAuth session.
 - Log every tool call to the relevant access log table (memory vs. finance vs. general).
 

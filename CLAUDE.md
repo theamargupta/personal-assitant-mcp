@@ -266,12 +266,18 @@ OPENAI_API_KEY=                    # OpenAI API key (for document embeddings)
 
 ```bash
 npm install
-npm run dev        # Start dev server
-npm run build      # Production build
-npm run lint       # ESLint 9 flat config (eslint.config.mjs — extends eslint-config-next/core-web-vitals + /typescript)
+npm run dev            # Start dev server
+npm run build          # Production build
+npm run lint           # ESLint 9 flat config (eslint.config.mjs — extends eslint-config-next/core-web-vitals + /typescript)
+npm run test           # Vitest, one-shot
+npm run test:coverage  # Vitest + v8 coverage
 ```
 
 **Lint override:** `tests/**` + `**/*.test.*` relax `@typescript-eslint/no-explicit-any` (off) and use `_`-prefix-ignoring `no-unused-vars` — Supabase query-chain mocks need `any`. Production code keeps strict rules.
+
+**Test coverage (2026-04-18):** 74 test files / 812 tests / 92.12% statements / 93.87% lines. Added workstreams: `tests/api/**` (REST route handlers 0→100%), `tests/chat/**` (openai-stream + tools), `tests/mcp/tools/memory-integration.test.ts` + `tests/memory/spaces.test.ts` (real lib, Supabase-only mocking), `tests/mcp/tools/tasks-subtasks.test.ts` + `tasks-project-context.test.ts` (subtask + project_context branches).
+
+**Memory test convention:** `tests/mcp/tools/memory-integration.test.ts` does NOT mock `@/lib/memory/*` — it exercises the real lib with only Supabase, `@/lib/documents/embed` (avoids `OPENAI_API_KEY`), and the MCP SDK mocked. Prefer this shape for new memory tests; existing mock-at-boundary tests stay as-is.
 
 ## Current Status
 

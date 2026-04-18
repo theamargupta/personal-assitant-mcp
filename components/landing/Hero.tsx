@@ -1,8 +1,8 @@
 'use client'
 
+import Image from 'next/image'
 import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { useRef } from 'react'
-import { ChatAnimation } from './ChatAnimation'
 
 const snappySpring = { type: 'spring' as const, stiffness: 400, damping: 15, mass: 1 }
 
@@ -128,7 +128,7 @@ export function Hero() {
         <motion.div variants={fadeUp} className="mb-8">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.25em] text-text-secondary">
             <span className="h-1.5 w-1.5 rounded-full bg-neon animate-pulse" />
-            25 Tools &middot; 5 Modules &middot; One MCP Server
+            MCP server &middot; Web dashboard &middot; iOS app
           </span>
         </motion.div>
 
@@ -137,11 +137,11 @@ export function Hero() {
           variants={fadeUp}
           className="font-sans text-[clamp(2.75rem,7.5vw,6.5rem)] font-bold leading-[0.92] tracking-[-0.04em] [text-wrap:balance]"
         >
-          Your life,{' '}
-          <span className="text-neon">orchestrated</span>
+          Claude that{' '}
+          <span className="text-neon">actually knows you.</span>
           <br />
           <span className="text-text-secondary font-medium text-[0.55em] leading-[1.3] tracking-[-0.02em]">
-            by intelligence
+            In Hinglish, with widgets.
           </span>
         </motion.h1>
 
@@ -150,8 +150,9 @@ export function Hero() {
           variants={fadeUp}
           className="mt-8 max-w-xl text-[clamp(1rem,1.2vw,1.125rem)] leading-[1.7] text-text-secondary [text-wrap:pretty]"
         >
-          Track habits, manage tasks, store documents, monitor spending, hit goals —
-          all through Claude. Just talk. In Hindi, English, or whatever feels natural.
+          Sathi is an MCP server that plugs your habits, tasks, money, documents,
+          goals, and memory into Claude and ChatGPT. Ask &quot;mera April review do&quot; — get
+          back a live dashboard, not a paragraph. Same data syncs to the web and your iOS app.
         </motion.p>
 
         {/* CTAs */}
@@ -164,11 +165,17 @@ export function Hero() {
           </MagneticButton>
         </motion.div>
 
-        {/* Chat showcase */}
-        <motion.div variants={fadeUp} className="relative mt-20 w-full max-w-lg">
-          <div className="absolute -inset-12 bg-neon/[0.03] rounded-full blur-[80px] pointer-events-none" />
-          <div className="relative">
-            <ChatAnimation />
+        <motion.div variants={fadeUp} className="relative mt-20 w-full max-w-4xl">
+          <div className="absolute -inset-16 bg-neon/[0.03] rounded-full blur-[100px] pointer-events-none" />
+          <div className="relative rounded-2xl border border-white/[0.06] bg-white/[0.01] overflow-hidden shadow-2xl">
+            <Image
+              src="/landing/claude-widget-review.png"
+              alt="Sathi's get_review widget rendering inside Claude"
+              width={1600}
+              height={1000}
+              className="w-full h-auto"
+              priority
+            />
           </div>
           <div className="absolute -bottom-8 left-0 right-0 h-24 bg-gradient-to-t from-bg-primary to-transparent pointer-events-none" />
         </motion.div>
