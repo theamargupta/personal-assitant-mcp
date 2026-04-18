@@ -113,7 +113,7 @@ const mocks = vi.hoisted(() => {
       created_at: '2026-04-15T06:30:00.000Z',
     })),
     deleteCategory: vi.fn(async () => undefined),
-    registeredTools: {} as Record<string, { handler: Function }>,
+    registeredTools: {} as Record<string, { handler: (...args: unknown[]) => unknown }>,
   }
 })
 
@@ -140,7 +140,7 @@ vi.mock('@/lib/finance/categories', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+    tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
       mocks.registeredTools[name] = { handler }
     }
   },

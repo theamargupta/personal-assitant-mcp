@@ -7,7 +7,6 @@ type QueryChain = Record<string, ReturnType<typeof vi.fn>> & {
 }
 
 type GoalType = 'outcome' | 'milestone'
-type GoalStatus = 'active' | 'completed' | 'failed'
 type GoalMetricForm = 'tasks_completed' | 'habit_streak' | 'savings' | 'custom'
 type DbMetricType = 'habit_streak' | 'habit_completion' | 'tasks_completed' | 'spending_limit'
 

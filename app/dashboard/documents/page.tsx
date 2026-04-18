@@ -78,6 +78,7 @@ export default function DocumentsPage() {
     setLoading(false)
   }, [tab])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadDocs() }, [loadDocs])
 
   async function downloadDoc(doc: Doc) {

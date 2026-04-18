@@ -13,7 +13,7 @@ type QueryChain = Record<string, ReturnType<typeof vi.fn>> & {
 const mocks = vi.hoisted(() => ({
   queues: new Map<string, any[]>(),
   mockClient: { from: vi.fn() },
-  registeredTools: {} as Record<string, { handler: Function }>,
+  registeredTools: {} as Record<string, { handler: (...args: unknown[]) => unknown }>,
 }))
 
 vi.mock('@/lib/supabase/service-role', () => ({
@@ -22,7 +22,7 @@ vi.mock('@/lib/supabase/service-role', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+    tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
       mocks.registeredTools[name] = { handler }
     }
   },

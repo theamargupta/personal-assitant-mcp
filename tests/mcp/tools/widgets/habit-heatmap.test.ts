@@ -32,13 +32,13 @@ vi.mock('@/lib/supabase/service-role', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+    tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
       registeredTools[name] = { handler }
     }
   },
 }))
 
-const registeredTools: Record<string, { handler: Function }> = {}
+const registeredTools: Record<string, { handler: (...args: unknown[]) => unknown }> = {}
 
 import { registerHabitTools } from '@/lib/mcp/tools/habits'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -56,9 +56,7 @@ describe('get_habit_analytics — visual heatmap output', () => {
   it('should return content array with at least a text entry', async () => {
     // Setup: habit exists, some logs
     const today = todayISTDate()
-    let callCount = 0
     mockClient.from.mockImplementation((table: string) => {
-      callCount++
       if (table === 'habits') {
         return createChain({ data: { id: 'h-1', name: 'Workout', created_at: '2026-01-01T00:00:00Z' }, error: null })
       }

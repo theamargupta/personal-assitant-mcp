@@ -30,7 +30,7 @@ function createChain(val: unknown = { data: null, error: null }) {
 
 describe('get_habit_streak — formatted output', () => {
   const mockClient = { from: vi.fn() }
-  const registeredTools: Record<string, { handler: Function }> = {}
+  const registeredTools: Record<string, { handler: (...args: unknown[]) => unknown }> = {}
 
   beforeEach(async () => {
     vi.resetModules()
@@ -42,7 +42,7 @@ describe('get_habit_streak — formatted output', () => {
 
     vi.doMock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
       McpServer: class {
-        tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+        tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
           registeredTools[name] = { handler }
         }
       },
@@ -102,7 +102,7 @@ describe('get_habit_streak — formatted output', () => {
 
 describe('list_tasks — formatted output', () => {
   const mockClient = { from: vi.fn() }
-  const registeredTools: Record<string, { handler: Function }> = {}
+  const registeredTools: Record<string, { handler: (...args: unknown[]) => unknown }> = {}
 
   beforeEach(async () => {
     vi.resetModules()
@@ -114,7 +114,7 @@ describe('list_tasks — formatted output', () => {
 
     vi.doMock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
       McpServer: class {
-        tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+        tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
           registeredTools[name] = { handler }
         }
       },
@@ -202,7 +202,7 @@ describe('list_tasks — formatted output', () => {
 // ══════════════════════════════════════════════════════════
 
 describe('list_transactions — formatted output', () => {
-  const registeredTools: Record<string, { handler: Function }> = {}
+  const registeredTools: Record<string, { handler: (...args: unknown[]) => unknown }> = {}
 
   beforeEach(async () => {
     vi.resetModules()
@@ -255,7 +255,7 @@ describe('list_transactions — formatted output', () => {
 
     vi.doMock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
       McpServer: class {
-        tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+        tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
           registeredTools[name] = { handler }
         }
       },

@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
   getSpace: vi.fn(),
   updateSpace: vi.fn(),
   countSpaceItems: vi.fn(),
-  registeredTools: {} as Record<string, { handler: Function }>,
-  registeredAppTools: {} as Record<string, { handler: Function }>,
+  registeredTools: {} as Record<string, { handler: (...args: unknown[]) => unknown }>,
+  registeredAppTools: {} as Record<string, { handler: (...args: unknown[]) => unknown }>,
   mockClient: {
     from: vi.fn(() => ({
       insert: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -45,14 +45,14 @@ vi.mock('@/lib/memory/items', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+    tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
       mocks.registeredTools[name] = { handler }
     }
   },
 }))
 
 vi.mock('@modelcontextprotocol/ext-apps/server', () => ({
-  registerAppTool: (_server: unknown, name: string, opts: { description?: string; inputSchema?: unknown }, handler: Function) => {
+  registerAppTool: (_server: unknown, name: string, opts: { description?: string; inputSchema?: unknown }, handler: (...args: unknown[]) => unknown) => {
     void opts
     mocks.registeredAppTools[name] = { handler }
   },

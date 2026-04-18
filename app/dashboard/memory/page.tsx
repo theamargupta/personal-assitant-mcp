@@ -106,6 +106,7 @@ export default function MemoryPage() {
     setLoading(false)
   }, [activeSpace, activeCategory])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadData() }, [loadData])
 
   const handleSave = async () => {

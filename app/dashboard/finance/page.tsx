@@ -115,6 +115,7 @@ export default function FinancePage() {
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData() }, [loadData])
 
   async function addExpense(e: FormEvent) {

@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   chunkText: vi.fn(),
   generateEmbeddings: vi.fn(),
   generateEmbedding: vi.fn(),
-  registeredTools: {} as Record<string, { handler: Function }>,
+  registeredTools: {} as Record<string, { handler: (...args: unknown[]) => unknown }>,
 }))
 
 vi.mock('@/lib/supabase/service-role', () => ({
@@ -48,7 +48,7 @@ vi.mock('@/lib/documents/embed', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _description: string, _schema: unknown, handler: Function) {
+    tool(name: string, _description: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
       mocks.registeredTools[name] = { handler }
     }
   },

@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   mockClient: {
     from: vi.fn(),
   },
-  registeredTools: {} as Record<string, { schema: unknown; handler: Function }>,
+  registeredTools: {} as Record<string, { schema: unknown; handler: (...args: unknown[]) => unknown }>,
 }))
 
 vi.mock('@/lib/supabase/service-role', () => ({
@@ -26,7 +26,7 @@ vi.mock('@/lib/supabase/service-role', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _desc: string, schema: unknown, handler: Function) {
+    tool(name: string, _desc: string, schema: unknown, handler: (...args: unknown[]) => unknown) {
       mocks.registeredTools[name] = { schema, handler }
     }
   },

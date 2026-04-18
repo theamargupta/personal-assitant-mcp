@@ -17,14 +17,13 @@ async function extractFromPdf(buffer: Buffer): Promise<string> {
   // pdfjs-dist (used by pdf-parse) expects DOMMatrix in global scope.
   // We only extract text (no rendering), so a minimal stub is sufficient.
   if (typeof globalThis.DOMMatrix === 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     globalThis.DOMMatrix = class DOMMatrixStub {
       a=1;b=0;c=0;d=1;e=0;f=0;
       is2D = true; isIdentity = true;
       static fromFloat32Array() { return new DOMMatrixStub() }
       static fromFloat64Array() { return new DOMMatrixStub() }
       static fromMatrix() { return new DOMMatrixStub() }
-    } as any
+    } as unknown as typeof DOMMatrix
   }
 
   const { PDFParse } = await import('pdf-parse')

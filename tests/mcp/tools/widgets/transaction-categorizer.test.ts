@@ -51,11 +51,11 @@ vi.mock('@/lib/finance/categories', () => ({
   ensurePresetCategories: vi.fn(),
 }))
 
-const registeredTools: Record<string, { handler: Function }> = {}
+const registeredTools: Record<string, { handler: (...args: unknown[]) => unknown }> = {}
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+    tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
       registeredTools[name] = { handler }
     }
   },

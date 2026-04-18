@@ -170,6 +170,7 @@ export default function GoalsPage() {
     setLoading(false)
   }, [tab])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadGoals() }, [loadGoals])
 
   function openCreateModal() {

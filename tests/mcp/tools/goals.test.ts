@@ -89,7 +89,7 @@ const mocks = vi.hoisted(() => ({
       tasks_pending: 2,
     },
   })),
-  registeredTools: {} as Record<string, { handler: Function }>,
+  registeredTools: {} as Record<string, { handler: (...args: unknown[]) => unknown }>,
 }))
 
 vi.mock('@/lib/supabase/service-role', () => ({
@@ -113,7 +113,7 @@ vi.mock('@/lib/goals/review', () => ({
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
-    tool(name: string, _desc: string, _schema: unknown, handler: Function) {
+    tool(name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) {
       mocks.registeredTools[name] = { handler }
     }
   },

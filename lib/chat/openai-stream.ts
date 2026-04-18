@@ -31,7 +31,7 @@ export async function runOpenAIChatLoop(
 ): Promise<void> {
   const tools = buildOpenAITools()
 
-  let messages: ChatCompletionMessageParam[] = [
+  const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...inbound.map((m) => ({
       role: m.role,

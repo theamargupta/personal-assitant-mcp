@@ -82,6 +82,7 @@ supabase/
     007_memory_vaults.sql           # pa_memory_* tables + pa_match_memories (prefix: shared Supabase w/ memory-mcp)
     008_memory_hybrid_search.sql    # search_vector + GIN, pa_hybrid_search, pa_match_memories result shape update
     009_task_categorization.sql     # tasks.task_type ('personal'|'project') + tasks.project TEXT + CHECK + composite index
+    010_task_subtasks.sql           # tasks.parent_task_id + position + prevent_nested_subtasks trigger (1-level, inherits task_type/project)
 app/api/finance/
     transactions/route.ts           # POST + GET transactions
     transactions/[id]/route.ts      # PATCH + DELETE transaction
@@ -269,6 +270,8 @@ npm run dev        # Start dev server
 npm run build      # Production build
 npm run lint       # ESLint 9 flat config (eslint.config.mjs — extends eslint-config-next/core-web-vitals + /typescript)
 ```
+
+**Lint override:** `tests/**` + `**/*.test.*` relax `@typescript-eslint/no-explicit-any` (off) and use `_`-prefix-ignoring `no-unused-vars` — Supabase query-chain mocks need `any`. Production code keeps strict rules.
 
 ## Current Status
 
