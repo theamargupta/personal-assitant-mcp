@@ -329,7 +329,8 @@ export function registerHabitTools(server: McpServer) {
 
       const supabase = createServiceRoleClient()
 
-      let existing: { id: string; habit_id: string; logged_date: string } | null = null
+      type HabitLogRef = { id: string; habit_id: string; logged_date: string }
+      let existing: HabitLogRef | null = null
       if (log_id) {
         const { data, error } = await supabase
           .from('habit_logs')
@@ -340,7 +341,7 @@ export function registerHabitTools(server: McpServer) {
         if (error || !data) {
           return { content: [{ type: 'text' as const, text: 'Error: Habit log not found' }], isError: true }
         }
-        existing = data as typeof existing
+        existing = data as HabitLogRef
       } else if (habit_id && date) {
         const { data, error } = await supabase
           .from('habit_logs')
@@ -352,7 +353,7 @@ export function registerHabitTools(server: McpServer) {
         if (error || !data) {
           return { content: [{ type: 'text' as const, text: 'Error: Habit log not found' }], isError: true }
         }
-        existing = data as typeof existing
+        existing = data as HabitLogRef
       }
 
       if (!existing) {
